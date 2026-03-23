@@ -143,11 +143,11 @@ const PERIODS = [
 ];
 
 const DEFAULT_TT = {
-  0:[["AI 1","최종우","D202","ai"],["과학 3","정연화","","sci"],["수학 3","한정우","","math"],["한문 3","오정숙","","han"],["영어 3","이소라","","eng"],["국어 1","정가영","","kor"],["창체","","","brk"],["창체","","","brk"]],
-  1:[["국어 3","이성호","","kor"],["AI 2","윤태선","","ai"],["사회 1","이대일","","soc"],["과학탐구","이규현","D305","sci"],["영어 1","이주현A","","eng"],["외국어 2","김은경·조경호","","foreign"],["한문 2","이중호","","han"],["창체","","","brk"]],
-  2:[["과학 2","박찬규","","sci"],["체육 1","이상희","","pe"],["국어 2","민영의","","kor"],["AI 3","최지영B","D301","ai"],["수학 1","손대운","","math"],["한문 1","고재원","","han"],["창체","","","brk"],["창체","","","brk"]],
-  3:[["수학 2","곽동환","","math"],["국어 4","이성호","","kor"],["과학 1","김영민","","sci"],["사회 3","이현주","","soc"],["외국어 3","김은경·김리향","","foreign"],["음악 2","박민형","","music"],["CA","","","ca"],["CA","","","ca"]],
-  4:[["수학 4","한정우","","math"],["영어 2","김민경","","eng"],["외국어 1","김은경·조경호","","foreign"],["체육 2","이영도","","pe"],["음악 1","박민형","","music"],["사회 2","이주현B","","soc"],["창체","","","brk"],["창체","","","brk"]],
+  0:[["AI 1","최종우T","D202","ai"],["과학 3","정연화T","","sci"],["수학 3","한정우T","","math"],["한문 3","오정숙T","","han"],["영어 3","이소라T","","eng"],["국어 1","정가영T","","kor"],["창체","","","brk"],["창체","","","brk"]],
+  1:[["국어 3","이성호T","","kor"],["AI 2","윤태선T","","ai"],["사회 1","이대일T","","soc"],["과학탐구","이규현"T,"D305","sci"],["영어 1","이주현AT","","eng"],["외국어 2","김은경·조경호T","","foreign"],["한문 2","이중호T","","han"],["창체","","","brk"]],
+  2:[["과학 2","박찬규T","","sci"],["체육 1","이상희T","","pe"],["국어 2","민영의T","","kor"],["AI 3","최지영BT","D301","ai"],["수학 1","손대운T","","math"],["한문 1","고재원T","","han"],["창체","","","brk"],["창체","","","brk"]],
+  3:[["수학 2","곽동환T","","math"],["국어 4","이성호T","","kor"],["과학 1","김영민T","","sci"],["사회 3","이현주T","","soc"],["외국어 3","김은경·김리향T","","foreign"],["음악 2","박민형T","","music"],["CA","","","ca"],["CA","","","ca"]],
+  4:[["수학 4","한정우T","","math"],["영어 2","김민경T","","eng"],["외국어 1","김은경·조경호T","","foreign"],["체육 2","이영도T","","pe"],["음악 1","박민형T","","music"],["사회 2","이주현BT","","soc"],["창체","","","brk"],["창체","","","brk"]],
 };
 
 const DAY_NAMES = ["월","화","수","목","금","토","일"];
@@ -338,7 +338,7 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 56px)"}}>
       <div style={{background:"#222",color:"#fff",padding:"14px 16px 10px",flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div><div style={{fontSize:17,fontWeight:700,letterSpacing:-0.5}}>주간 플래너</div><div style={{fontSize:9,opacity:0.4,marginTop:1}}>2026 · 1-4 · 이주현B</div></div>
+          <div><div style={{fontSize:17,fontWeight:700,letterSpacing:-0.5}}>주간 플래너</div></div>
           <div style={{display:"flex",gap:6,alignItems:"center"}}>
             {user.photoURL && <img src={user.photoURL} style={{width:24,height:24,borderRadius:12}} referrerPolicy="no-referrer" />}
             <button onClick={()=>setShowSettings(!showSettings)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center"}}>⚙</button>
