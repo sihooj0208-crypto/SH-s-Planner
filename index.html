@@ -520,8 +520,9 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
           const wd = weekDates[i];
           const isToday = wd && wd.full === todayStr;
           const blocks = getBlocks(i);
-          const nk = i + "-lunch";
-          const lunchNote = notes[nk] || "";
+          const dayTodos = wd ? todos.filter(t => t.date === wd.full) : [];
+          const dayActiveTodos = dayTodos.filter(t => !t.done).sort((a,b) => (a.title||"").localeCompare(b.title||"","ko"));
+          const dayDoneTodos = dayTodos.filter(t => t.done);
  
           return (
             <div key={i} style={{background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.03)",overflow:"hidden",border:isToday?"2px solid #222":"2px solid transparent"}}>
@@ -532,8 +533,8 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
               </div>
  
               {/* Blocks */}
-              <div style={{padding:"4px 6px 8px",display:"flex",flexDirection:"column",gap:3,minHeight:120}}>
-                {blocks.length===0 && <div style={{fontSize:8,color:"#ddd",textAlign:"center",padding:"20px 0"}}>일정 없음</div>}
+              <div style={{padding:"4px 6px 4px",display:"flex",flexDirection:"column",gap:3,minHeight:60}}>
+                {blocks.length===0 && dayTodos.length===0 && <div style={{fontSize:8,color:"#ddd",textAlign:"center",padding:"20px 0"}}>일정 없음</div>}
                 {blocks.map((b,bi) => {
                   const sc = b.type==="class" ? (SC[b.subj]||SC.etc) : null;
                   const color = b.type==="class" ? (b.customColor||sc.fg) : b.color;
@@ -551,6 +552,27 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
                   );
                 })}
               </div>
+ 
+              {/* Per-day todos */}
+              {dayTodos.length > 0 && (
+                <div style={{padding:"4px 6px 8px",borderTop:"1px dashed #eee"}}>
+                  <div style={{fontSize:7,fontWeight:700,color:"#ccc",marginBottom:3,letterSpacing:0.5}}>TO DO</div>
+                  {dayActiveTodos.map(t => (
+                    <div key={t.id} onClick={()=>toggleTodo(t.id)} style={{display:"flex",alignItems:"center",gap:4,padding:"3px 0",cursor:"pointer"}}>
+                      <div style={{width:10,height:10,borderRadius:2,border:"1px solid #ddd",flexShrink:0}} />
+                      <div style={{width:2,height:10,borderRadius:1,background:t.color,flexShrink:0}} />
+                      <span style={{fontSize:8,color:"#444",lineHeight:1.3,flex:1,minWidth:0}}>{t.title}</span>
+                    </div>
+                  ))}
+                  {dayDoneTodos.map(t => (
+                    <div key={t.id} onClick={()=>toggleTodo(t.id)} style={{display:"flex",alignItems:"center",gap:4,padding:"2px 0",cursor:"pointer",opacity:0.3}}>
+                      <div style={{width:10,height:10,borderRadius:2,background:t.color,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{color:"#fff",fontSize:6,fontWeight:700}}>✓</span></div>
+                      <div style={{width:2,height:10,borderRadius:1,background:t.color,flexShrink:0}} />
+                      <span style={{fontSize:8,color:"#bbb",textDecoration:"line-through",lineHeight:1.3}}>{t.title}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -599,7 +621,3 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
 </body>
 </html>
  
-
-
-
-
