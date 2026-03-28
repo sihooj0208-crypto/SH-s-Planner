@@ -436,12 +436,12 @@ function TodoTab({todos,setTodos}) {
   const toggleTodo=(id)=>setTodos(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const removeTodo=(id)=>{setTodos(p=>p.filter(t=>t.id!==id));if(editId===id)cancelForm();};
  
-  // Build date filter buttons: 전체, 어제, 오늘, + next 7 days, 완료
+  // Build date filter buttons: 오늘 + next 6 days + 완료
   const buildDateFilters = () => {
-    const filters = [["all","전체"],["yesterday","어제"],["today","오늘"]];
+    const filters = [["today","오늘"]];
     const base = new Date();
     if (base.getHours() < 5) base.setDate(base.getDate() - 1);
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 1; i <= 6; i++) {
       const d = new Date(base);
       d.setDate(d.getDate() + i);
       const ds = d.toISOString().slice(0,10);
@@ -604,3 +604,4 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
 </script>
 </body>
 </html>
+ 
