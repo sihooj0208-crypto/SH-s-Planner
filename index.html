@@ -79,9 +79,9 @@ async function saveData(userId, key, val) {
  
 /* ── Helpers ── */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const getToday = () => new Date().toISOString().slice(0, 10);
-const getTomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
-const getYesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+const getToday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
+const getTomorrow = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
+const getYesterday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
 const fmtDate = (d) => { const o = new Date(d); return (o.getMonth() + 1) + "." + String(o.getDate()).padStart(2, "0"); };
  
 const toMin = (t) => {
@@ -102,7 +102,7 @@ const getMonday = (d) => {
   return date.toISOString().slice(0, 10);
 };
  
-const getCurrentWeekKey = () => getMonday(new Date());
+const getCurrentWeekKey = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return getMonday(d); };
 const shiftWeek = (weekKey, delta) => { const d = new Date(weekKey); d.setDate(d.getDate() + delta * 7); return d.toISOString().slice(0, 10); };
  
 const getWeekDates = (weekKey) => {
@@ -289,7 +289,7 @@ function MainApp({ user, signOut }) {
  
 /* ════════════ TIMETABLE ════════════ */
 function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCustomBlocks,weekKey,setWeekKey,isCurrentWeek,user,signOut}) {
-  const initDay = () => { const d = new Date().getDay(); return d===0?6:d-1; };
+  const initDay = () => { const n = new Date(); if (n.getHours() < 5) n.setDate(n.getDate() - 1); const d = n.getDay(); return d===0?6:d-1; };
   const [selDay,setSelDay] = useState(initDay);
   const scrollRef = useRef(null);
   const isWeekend = selDay >= 5;
@@ -436,17 +436,37 @@ function TodoTab({todos,setTodos}) {
   const toggleTodo=(id)=>setTodos(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const removeTodo=(id)=>{setTodos(p=>p.filter(t=>t.id!==id));if(editId===id)cancelForm();};
  
+  // Build date filter buttons: 전체, 어제, 오늘, + next 7 days, 완료
+  const buildDateFilters = () => {
+    const filters = [["all","전체"],["yesterday","어제"],["today","오늘"]];
+    const base = new Date();
+    if (base.getHours() < 5) base.setDate(base.getDate() - 1);
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(base);
+      d.setDate(d.getDate() + i);
+      const ds = d.toISOString().slice(0,10);
+      const label = (d.getMonth()+1) + "/" + d.getDate();
+      filters.push([ds, label]);
+    }
+    filters.push(["done","완료"]);
+    return filters;
+  };
+  const dateFilters = buildDateFilters();
+ 
   const filtered=todos.filter((t)=>{
-    if(filter==="done")return t.done;if(filter==="today")return t.date===getToday();
-    if(filter==="tomorrow")return t.date===getTomorrow();if(filter==="yesterday")return t.date===getYesterday();return true;
+    if(filter==="done")return t.done;
+    if(filter==="today")return t.date===getToday();
+    if(filter==="yesterday")return t.date===getYesterday();
+    if(filter==="all")return true;
+    return t.date===filter;
   }).sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;if(a.color!==b.color)return(a.color||"").localeCompare(b.color||"");return(a.title||"").localeCompare(b.title||"","ko");});
  
   return(
     <div style={{padding:"16px 12px"}}>
       <div style={{marginBottom:2}}><div style={{fontSize:18,fontWeight:700,letterSpacing:0.5,fontFamily:"monospace"}}>TO DO LIST</div></div>
       <div style={{fontSize:9,color:"#bbb",marginBottom:10}}>{todos.filter(t=>!t.done).length}개 남음</div>
-      <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",paddingBottom:2}}>
-        {[["all","전체"],["today","오늘"],["tomorrow","내일"],["yesterday","어제"],["done","완료"]].map(([k,l])=>(<button key={k} onClick={()=>setFilter(k)} style={{padding:"4px 11px",borderRadius:14,border:filter===k?"1.5px solid #222":"1.5px solid #e0e0e0",cursor:"pointer",fontSize:10,fontWeight:filter===k?700:400,whiteSpace:"nowrap",background:filter===k?"#222":"#fff",color:filter===k?"#fff":"#999",transition:"all 0.15s"}}>{l}</button>))}
+      <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",paddingBottom:4,WebkitOverflowScrolling:"touch"}}>
+        {dateFilters.map(([k,l])=>(<button key={k} onClick={()=>setFilter(k)} style={{padding:"4px 11px",borderRadius:14,border:filter===k?"1.5px solid #222":"1.5px solid #e0e0e0",cursor:"pointer",fontSize:10,fontWeight:filter===k?700:400,whiteSpace:"nowrap",background:filter===k?"#222":"#fff",color:filter===k?"#fff":"#999",transition:"all 0.15s",flexShrink:0}}>{l}</button>))}
       </div>
  
       {showAdd&&(<div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 6px rgba(0,0,0,0.03)",padding:14,marginBottom:10,border:"1.5px solid #222",overflow:"hidden"}}>
@@ -584,4 +604,3 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
 </script>
 </body>
 </html>
- 
