@@ -79,10 +79,12 @@ async function saveData(userId, key, val) {
  
 /* ── Helpers ── */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-const getToday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
-const getTomorrow = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); };
-const getYesterday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); };
-const fmtDate = (d) => { const o = new Date(d); return (o.getMonth() + 1) + "." + String(o.getDate()).padStart(2, "0"); };
+// Local date string (avoids UTC timezone shift)
+const toLocalDateStr = (d) => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+const getToday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return toLocalDateStr(d); };
+const getTomorrow = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() + 1); return toLocalDateStr(d); };
+const getYesterday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() - 1); return toLocalDateStr(d); };
+const fmtDate = (d) => { const o = new Date(d + "T12:00:00"); return (o.getMonth() + 1) + "." + String(o.getDate()).padStart(2, "0"); };
  
 const toMin = (t) => {
   const parts = t.split(":");
@@ -99,20 +101,20 @@ const getMonday = (d) => {
   const day = date.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + diff);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateStr(date);
 };
  
 const getCurrentWeekKey = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return getMonday(d); };
-const shiftWeek = (weekKey, delta) => { const d = new Date(weekKey); d.setDate(d.getDate() + delta * 7); return d.toISOString().slice(0, 10); };
+const shiftWeek = (weekKey, delta) => { const d = new Date(weekKey + "T12:00:00"); d.setDate(d.getDate() + delta * 7); return toLocalDateStr(d); };
  
 const getWeekDates = (weekKey) => {
   const dates = [];
-  for (let i = 0; i < 7; i++) { const d = new Date(weekKey); d.setDate(d.getDate() + i); dates.push({ month: d.getMonth() + 1, day: d.getDate(), full: d.toISOString().slice(0, 10) }); }
+  for (let i = 0; i < 7; i++) { const d = new Date(weekKey + "T12:00:00"); d.setDate(d.getDate() + i); dates.push({ month: d.getMonth() + 1, day: d.getDate(), full: toLocalDateStr(d) }); }
   return dates;
 };
  
 const getWeekLabel = (weekKey) => {
-  const mon = new Date(weekKey); const sun = new Date(weekKey); sun.setDate(sun.getDate() + 6);
+  const mon = new Date(weekKey + "T12:00:00"); const sun = new Date(weekKey + "T12:00:00"); sun.setDate(sun.getDate() + 6);
   return (mon.getMonth() + 1) + "." + mon.getDate() + " - " + (sun.getMonth() + 1) + "." + sun.getDate();
 };
  
@@ -438,13 +440,13 @@ function TodoTab({todos,setTodos}) {
  
   // Build date filter buttons: 오늘 + next 6 days + 완료
   const buildDateFilters = () => {
-    const filters = [["today","오늘"]];
+    const filters = [["yesterday","어제"],["today","오늘"]];
     const base = new Date();
     if (base.getHours() < 5) base.setDate(base.getDate() - 1);
     for (let i = 1; i <= 6; i++) {
       const d = new Date(base);
       d.setDate(d.getDate() + i);
-      const ds = d.toISOString().slice(0,10);
+      const ds = toLocalDateStr(d);
       const label = (d.getMonth()+1) + "/" + d.getDate();
       filters.push([ds, label]);
     }
@@ -604,4 +606,3 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
 </script>
 </body>
 </html>
- 
