@@ -274,16 +274,15 @@ function MainApp({ user, signOut }) {
   const isCurrentWeek = weekKey === getCurrentWeekKey();
  
   return (
-    <div style={{maxWidth:(tab==="overview"||tab==="grid")?1200:480,margin:"0 auto",minHeight:"100vh",background:"#fafaf8",display:"flex",flexDirection:"column",position:"relative",transition:"max-width 0.3s"}}>
+    <div style={{maxWidth:tab==="overview"?1200:480,margin:"0 auto",minHeight:"100vh",background:"#fafaf8",display:"flex",flexDirection:"column",position:"relative",transition:"max-width 0.3s"}}>
       <div style={{flex:1,overflow:"auto",paddingBottom:56}}>
         {tab === "timetable" && <TimetableTab timetable={timetable} setTimetable={setTimetable} notes={weekNotes} setNotes={setWeekNotes} customBlocks={weekBlocks} setCustomBlocks={setWeekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} user={user} signOut={signOut} />}
         {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
         {tab === "overview" && <OverviewTab timetable={timetable} notes={weekNotes} customBlocks={weekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} todos={todos} setTodos={setTodos} />}
-        {tab === "grid" && <GridTab timetable={timetable} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} userId={userId} />}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:(tab==="overview"||tab==="grid")?1200:480,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(20px)",borderTop:"1px solid #eee",display:"flex",zIndex:100}}>
-        {[{id:"timetable",label:"시간표"},{id:"grid",label:"TIME TABLE"},{id:"overview",label:"전체 보기"},{id:"todo",label:"TO DO LIST"}].map((t) => (
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"14px 0 14px",fontSize:tab==="grid"&&t.id==="grid"?10:11,color:"#222",fontWeight:tab===t.id?700:400,opacity:tab===t.id?1:0.35,borderTop:tab===t.id?"2px solid #222":"2px solid transparent",transition:"all 0.15s"}}>{t.label}</button>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:tab==="overview"?1200:480,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(20px)",borderTop:"1px solid #eee",display:"flex",zIndex:100}}>
+        {[{id:"timetable",label:"시간표"},{id:"overview",label:"전체 보기"},{id:"todo",label:"TO DO LIST"}].map((t) => (
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"14px 0 14px",fontSize:11,color:"#222",fontWeight:tab===t.id?700:400,opacity:tab===t.id?1:0.35,borderTop:tab===t.id?"2px solid #222":"2px solid transparent",transition:"all 0.15s"}}>{t.label}</button>
         ))}
       </div>
     </div>
@@ -601,172 +600,6 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
         })}
       </div>
  
-    </div>
-  );
-}
- 
-/* ════════════ GRID TIMETABLE ════════════ */
-const GRID_PALETTE = [
-  "#f8c8c8","#f4a4a4","#e07070",
-  "#ffd8a8","#ffbb70","#e89840",
-  "#fff4a0","#f5e642","#d4a017",
-  "#c8f0c8","#8ed88e","#4caf50",
-  "#b8e8e0","#70d0c0","#009688",
-  "#c0d8f8","#80b0e8","#4080d0",
-  "#d0c0f0","#a888d8","#7c4dff",
-  "#f0c0e0","#e080b8","#c0387e",
-  "#d8d8d8","#999",
-];
- 
-function GridTab({ timetable, weekKey, setWeekKey, isCurrentWeek, userId }) {
-  const [gridColors, setGridColors] = useState({});
-  const [selectedColor, setSelectedColor] = useState(GRID_PALETTE[0]);
-  const [erasing, setErasing] = useState(false);
-  const [gridLoaded, setGridLoaded] = useState(false);
-  const todayStr = getToday();
-  const weekDates = getWeekDates(weekKey);
- 
-  // Load grid data per week
-  useEffect(() => {
-    setGridLoaded(false);
-    loadData(userId, "grid-" + weekKey, {}).then((g) => { setGridColors(g); setGridLoaded(true); });
-  }, [weekKey, userId]);
- 
-  // Save with debounce
-  const saveRef = useRef(null);
-  useEffect(() => {
-    if (!gridLoaded) return;
-    if (saveRef.current) clearTimeout(saveRef.current);
-    saveRef.current = setTimeout(() => saveData(userId, "grid-" + weekKey, gridColors), 500);
-  }, [gridColors, gridLoaded, weekKey, userId]);
- 
-  const goWeek = (delta) => setWeekKey(shiftWeek(weekKey, delta));
- 
-  // Hours: 6AM to 5AM next day (6,7,...,23,0,1,2,3,4)
-  const hours = [];
-  for (let h = 6; h < 24; h++) hours.push(h);
-  for (let h = 0; h < 5; h++) hours.push(h);
- 
-  const formatHour = (h) => {
-    if (h === 0) return "12";
-    if (h <= 12) return String(h);
-    return String(h - 12);
-  };
- 
-  // Build pre-filled class map: { "dayIdx-hour" : color }
-  const classMap = {};
-  for (let dayIdx = 0; dayIdx < 5; dayIdx++) {
-    const classes = timetable[dayIdx] || [];
-    classes.forEach((cls, i) => {
-      if (!cls) return;
-      const period = PERIODS[i];
-      if (!period) return;
-      const sc = SC[cls[3]] || SC.etc;
-      const color = cls[4] || sc.fg;
-      const startH = parseInt(period.start.split(":")[0]);
-      const endH = parseInt(period.end.split(":")[0]);
-      const endM = parseInt(period.end.split(":")[1]);
-      for (let h = startH; h <= (endM > 0 ? endH : endH - 1); h++) {
-        classMap[dayIdx + "-" + h] = color;
-      }
-    });
-  }
- 
-  const handleCellClick = (dayIdx, hour) => {
-    const key = dayIdx + "-" + hour;
-    if (erasing) {
-      setGridColors((prev) => { const n = { ...prev }; delete n[key]; return n; });
-    } else {
-      setGridColors((prev) => ({ ...prev, [key]: selectedColor }));
-    }
-  };
- 
-  const clearAll = () => { setGridColors({}); };
- 
-  if (!gridLoaded) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"calc(100vh - 56px)",color:"#ccc",fontSize:12}}>불러오는 중...</div>;
- 
-  return (
-    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 56px)"}}>
-      {/* Header */}
-      <div style={{background:"#222",color:"#fff",padding:"12px 16px 10px",flexShrink:0}}>
-        <div style={{fontSize:15,fontWeight:700,letterSpacing:1,fontFamily:"monospace",textAlign:"center",marginBottom:8}}>TIME TABLE</div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <button onClick={()=>goWeek(-1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:11,fontFamily:"monospace",opacity:0.7}}>{getWeekLabel(weekKey)}</div>
-            {!isCurrentWeek&&<button onClick={()=>setWeekKey(getCurrentWeekKey())} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",padding:"2px 8px",borderRadius:6,fontSize:8,cursor:"pointer",marginTop:2,opacity:0.7}}>이번 주로</button>}
-          </div>
-          <button onClick={()=>goWeek(1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
-        </div>
-      </div>
- 
-      {/* Color palette */}
-      <div style={{background:"#fff",borderBottom:"1px solid #eee",padding:"8px 12px",flexShrink:0}}>
-        <div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
-          {GRID_PALETTE.map((c) => (
-            <div key={c} onClick={() => { setSelectedColor(c); setErasing(false); }} style={{
-              width: 22, height: 22, borderRadius: 5, background: c, cursor: "pointer",
-              border: !erasing && selectedColor === c ? "2.5px solid #222" : "2.5px solid transparent",
-              outline: !erasing && selectedColor === c ? "1.5px solid #fff" : "none",
-            }} />
-          ))}
-          <div style={{width:1,height:18,background:"#e0e0e0",margin:"0 4px"}} />
-          <button onClick={() => setErasing(!erasing)} style={{
-            padding: "4px 10px", borderRadius: 6, fontSize: 9, cursor: "pointer", fontWeight: 600,
-            background: erasing ? "#222" : "#f0f0f0", color: erasing ? "#fff" : "#888",
-            border: erasing ? "1.5px solid #222" : "1.5px solid #ddd",
-          }}>지우개</button>
-          <button onClick={clearAll} style={{
-            padding: "4px 8px", borderRadius: 6, fontSize: 9, cursor: "pointer",
-            background: "#f0f0f0", color: "#aaa", border: "1.5px solid #ddd",
-          }}>전체 지우기</button>
-        </div>
-      </div>
- 
-      {/* Grid */}
-      <div style={{flex:1,overflow:"auto",background:"#fafaf8"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",tableLayout:"fixed",minWidth:400}}>
-          <thead>
-            <tr>
-              <th style={{width:36,padding:"6px 0",fontSize:9,color:"#bbb",fontWeight:600,borderBottom:"2px solid #222",background:"#fafaf8",position:"sticky",top:0,zIndex:2}}></th>
-              {DAY_NAMES.map((d,i) => {
-                const wd = weekDates[i];
-                const isToday = wd && wd.full === todayStr;
-                return <th key={i} style={{padding:"6px 0",fontSize:10,fontWeight:700,borderBottom:"2px solid #222",background:"#fafaf8",position:"sticky",top:0,zIndex:2,color:isToday?"#222":i>=5?"#c0a0a0":"#888"}}>
-                  <div>{d}</div>
-                  <div style={{fontSize:8,fontFamily:"monospace",fontWeight:isToday?700:400,color:isToday?"#fff":"#ccc",background:isToday?"#222":"transparent",borderRadius:6,display:"inline-block",padding:isToday?"1px 5px":"0"}}>{wd?wd.day:""}</div>
-                </th>;
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {hours.map((h) => (
-              <tr key={h}>
-                <td style={{padding:"0",textAlign:"right",paddingRight:6,fontSize:10,color:"#ccc",fontWeight:500,borderRight:"1px solid #e8e6e2",height:28,verticalAlign:"middle"}}>
-                  {formatHour(h)}
-                </td>
-                {DAY_NAMES.map((_, dayIdx) => {
-                  const cellKey = dayIdx + "-" + h;
-                  const userColor = gridColors[cellKey];
-                  const presetColor = classMap[cellKey];
-                  const bgColor = userColor || presetColor || "transparent";
-                  const hasColor = userColor || presetColor;
-                  return (
-                    <td key={dayIdx} onClick={() => handleCellClick(dayIdx, h)} style={{
-                      height: 28, padding: 0, cursor: "pointer",
-                      background: bgColor,
-                      borderRight: "1px solid #eeece8",
-                      borderBottom: "1px solid #eeece8",
-                      opacity: hasColor ? (presetColor && !userColor ? 0.35 : 0.7) : 1,
-                      transition: "background 0.1s",
-                    }} />
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
