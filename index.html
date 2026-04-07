@@ -9,7 +9,6 @@
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -26,23 +25,6 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
  
-/*
- ┌─────────────────────────────────────────────────┐
- │  Firebase 설정                                    │
- │  아래 firebaseConfig를 본인의 Firebase 프로젝트    │
- │  설정값으로 교체하세요.                             │
- │                                                   │
- │  설정 방법:                                        │
- │  1. https://console.firebase.google.com 접속      │
- │  2. 프로젝트 추가 (이름 자유)                      │
- │  3. 좌측 메뉴 "빌드" > "Authentication"            │
- │     → "시작하기" → "Google" 활성화                 │
- │  4. 좌측 메뉴 "빌드" > "Firestore Database"       │
- │     → "데이터베이스 만들기" → "테스트 모드"         │
- │  5. 프로젝트 설정(⚙) → 내 앱 → 웹 앱 추가(</>)   │
- │     → firebaseConfig 값을 아래에 복사              │
- └─────────────────────────────────────────────────┘
-*/
 const firebaseConfig = {
   apiKey: "AIzaSyCiTfzo9PtB3dmfStD4p3qzBY1ilVdFh0A",
   authDomain: "planner-30b23.firebaseapp.com",
@@ -53,33 +35,21 @@ const firebaseConfig = {
   measurementId: "G-N2NRDYFPYB"
 };
  
-// Firebase 초기화
 const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
  
-/* ── Firestore 저장/로드 ── */
 function getUserDoc(userId, key) {
   return db.collection("users").doc(userId).collection("data").doc(key);
 }
- 
 async function loadData(userId, key, fallback) {
-  try {
-    const doc = await getUserDoc(userId, key).get();
-    if (doc.exists) return doc.data().value;
-    return fallback;
-  } catch (e) { return fallback; }
+  try { const doc = await getUserDoc(userId, key).get(); if (doc.exists) return doc.data().value; return fallback; } catch (e) { return fallback; }
 }
- 
 async function saveData(userId, key, val) {
-  try {
-    await getUserDoc(userId, key).set({ value: val, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-  } catch (e) { /* silent */ }
+  try { await getUserDoc(userId, key).set({ value: val, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); } catch (e) {}
 }
  
-/* ── Helpers ── */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-// Local date string (avoids UTC timezone shift)
 const toLocalDateStr = (d) => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 const getToday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return toLocalDateStr(d); };
 const getTomorrow = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() + 1); return toLocalDateStr(d); };
@@ -118,7 +88,16 @@ const getWeekLabel = (weekKey) => {
   return (mon.getMonth() + 1) + "." + mon.getDate() + " - " + (sun.getMonth() + 1) + "." + sun.getDate();
 };
  
-/* ── Constants ── */
+/* D-Day 계산 */
+const calcDday = (dateStr) => {
+  const today = new Date(getToday() + "T00:00:00");
+  const target = new Date(dateStr + "T00:00:00");
+  const diff = Math.round((target - today) / (1000 * 60 * 60 * 24));
+  if (diff === 0) return "D-DAY";
+  if (diff > 0) return "D-" + diff;
+  return "D+" + Math.abs(diff);
+};
+ 
 const COLORS = ["#222","#777","#aaa","#ef9a9a","#e57373","#c62828","#ffcc80","#ffab91","#e65100","#fff59d","#ffe082","#f57f17","#a5d6a7","#81c784","#2e7d32","#80cbc4","#4db6ac","#00695c","#90caf9","#64b5f6","#1565c0","#b39ddb","#9575cd","#283593","#ce93d8","#ba68c8","#6a1b9a","#f48fb1","#f06292","#ad1457","#bcaaa4","#a1887f","#4e342e"];
  
 const SUBJ_LIST = [
@@ -155,6 +134,165 @@ const DEFAULT_TT = {
 const DAY_NAMES = ["월","화","수","목","금","토","일"];
 const EMPTY_BLOCKS = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
  
+/* ════════════ D-DAY BANNER ════════════ */
+function DdayBanner({ ddays, setDdays }) {
+  const [showManager, setShowManager] = useState(false);
+  const [form, setForm] = useState({ label: "", date: getToday(), color: "#ef9a9a", pinned: false });
+  const [editId, setEditId] = useState(null);
+ 
+  const sorted = [...ddays].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return new Date(a.date) - new Date(b.date);
+  });
+ 
+  const resetForm = () => { setForm({ label: "", date: getToday(), color: "#ef9a9a", pinned: false }); setEditId(null); };
+ 
+  const saveDday = () => {
+    if (!form.label.trim() || !form.date) return;
+    if (editId) {
+      setDdays(p => p.map(d => d.id === editId ? { ...d, ...form, label: form.label.trim() } : d));
+    } else {
+      setDdays(p => [...p, { id: uid(), ...form, label: form.label.trim() }]);
+    }
+    resetForm();
+  };
+ 
+  const startEdit = (item) => {
+    setForm({ label: item.label, date: item.date, color: item.color || "#ef9a9a", pinned: item.pinned || false });
+    setEditId(item.id);
+  };
+ 
+  const removeDday = (id) => { setDdays(p => p.filter(d => d.id !== id)); if (editId === id) resetForm(); };
+  const togglePin = (id) => setDdays(p => p.map(d => d.id === id ? { ...d, pinned: !d.pinned } : d));
+ 
+  const getDdayStyle = (diff) => {
+    if (diff === "D-DAY") return "#c62828";
+    const n = parseInt(diff.replace("D-","").replace("D+",""));
+    if (diff.startsWith("D-") && n <= 7) return "#e65100";
+    if (diff.startsWith("D+")) return "#aaa";
+    return "#555";
+  };
+ 
+  return (
+    <div style={{ background: "#1a1a1a", padding: "8px 14px 10px" }}>
+      {/* Scrollable D-Day chips */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 2, scrollbarWidth: "none" }}>
+        <button
+          onClick={() => setShowManager(!showManager)}
+          style={{ flexShrink: 0, background: "rgba(255,255,255,0.08)", border: "1px dashed rgba(255,255,255,0.2)", borderRadius: 8, color: "rgba(255,255,255,0.4)", fontSize: 10, padding: "4px 8px", cursor: "pointer", whiteSpace: "nowrap" }}
+        >
+          {showManager ? "닫기" : "+ D-Day"}
+        </button>
+        {sorted.length === 0 && (
+          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", whiteSpace: "nowrap" }}>D-Day를 추가해보세요</span>
+        )}
+        {sorted.map(item => {
+          const ddStr = calcDday(item.date);
+          const col = item.color || "#ef9a9a";
+          const isPast = ddStr.startsWith("D+");
+          return (
+            <div
+              key={item.id}
+              onClick={() => startEdit(item)}
+              style={{
+                flexShrink: 0, display: "flex", alignItems: "center", gap: 5,
+                background: isPast ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.07)",
+                border: "1px solid " + (item.pinned ? col : "rgba(255,255,255,0.1)"),
+                borderRadius: 8, padding: "4px 9px", cursor: "pointer",
+                opacity: isPast ? 0.5 : 1
+              }}
+            >
+              {item.pinned && <span style={{ fontSize: 8, color: col }}>★</span>}
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", whiteSpace: "nowrap" }}>{item.label}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, color: col, fontFamily: "monospace", whiteSpace: "nowrap" }}>{ddStr}</span>
+            </div>
+          );
+        })}
+      </div>
+ 
+      {/* Manager panel */}
+      {showManager && (
+        <div style={{ marginTop: 10, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 8 }}>
+            {editId ? "D-Day 수정" : "D-Day 추가"}
+          </div>
+ 
+          {/* Form */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+            <input
+              value={form.label}
+              onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+              placeholder="이름 (예: 중간고사, 수능...)"
+              autoFocus
+              style={{ width: "100%", padding: "6px 9px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7, fontSize: 11, color: "#fff", outline: "none" }}
+            />
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                type="date"
+                value={form.date}
+                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                style={{ flex: 1, padding: "5px 6px", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 7, fontSize: 10, color: "#fff", outline: "none", colorScheme: "dark" }}
+              />
+              <label style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", fontSize: 10, color: "rgba(255,255,255,0.5)", flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={form.pinned}
+                  onChange={e => setForm(f => ({ ...f, pinned: e.target.checked }))}
+                  style={{ accentColor: form.color }}
+                />
+                고정
+              </label>
+            </div>
+            {/* Color */}
+            <div>
+              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.3)", marginBottom: 3 }}>색상</div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                {["#ef9a9a","#ffab91","#ffe082","#a5d6a7","#80cbc4","#90caf9","#ce93d8","#f48fb1","#fff","#aaa","#555"].map(c => (
+                  <div key={c} onClick={() => setForm(f => ({ ...f, color: c }))}
+                    style={{ width: 18, height: 18, borderRadius: 4, background: c, cursor: "pointer", border: form.color === c ? "2px solid #fff" : "2px solid transparent" }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={saveDday} style={{ flex: 1, padding: "7px 0", background: form.color, border: "none", borderRadius: 7, fontSize: 11, fontWeight: 700, color: "#222", cursor: "pointer" }}>
+                {editId ? "저장" : "추가"}
+              </button>
+              {editId && (
+                <button onClick={() => removeDday(editId)} style={{ padding: "7px 10px", background: "rgba(255,80,80,0.2)", border: "1px solid rgba(255,80,80,0.3)", borderRadius: 7, fontSize: 10, color: "#ff9090", cursor: "pointer" }}>삭제</button>
+              )}
+              <button onClick={resetForm} style={{ padding: "7px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 7, fontSize: 10, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>취소</button>
+            </div>
+          </div>
+ 
+          {/* List */}
+          {sorted.length > 0 && (
+            <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+              {sorted.map(item => {
+                const ddStr = calcDday(item.date);
+                const col = item.color || "#ef9a9a";
+                const isPast = ddStr.startsWith("D+");
+                return (
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 7px", background: "rgba(255,255,255,0.04)", borderRadius: 6, opacity: isPast ? 0.5 : 1 }}>
+                    <div style={{ width: 3, height: 28, borderRadius: 2, background: col, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.8)" }}>{item.label}</div>
+                      <div style={{ fontSize: 8, color: "rgba(255,255,255,0.35)", fontFamily: "monospace" }}>{item.date}</div>
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: col, fontFamily: "monospace", flexShrink: 0 }}>{ddStr}</span>
+                    <button onClick={() => togglePin(item.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: item.pinned ? col : "rgba(255,255,255,0.2)", padding: 0, flexShrink: 0 }}>★</button>
+                    <button onClick={() => startEdit(item)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: "rgba(255,255,255,0.3)", padding: 0, flexShrink: 0 }}>수정</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+ 
 /* ════════════ AUTH WRAPPER ════════════ */
 function AuthWrapper() {
   const [user, setUser] = useState(null);
@@ -162,57 +300,24 @@ function AuthWrapper() {
   const [configError, setConfigError] = useState(false);
  
   useEffect(() => {
-    if (firebaseConfig.apiKey === "여기에-API-KEY-입력") {
-      setConfigError(true); setLoading(false); return;
-    }
+    if (firebaseConfig.apiKey === "여기에-API-KEY-입력") { setConfigError(true); setLoading(false); return; }
     const unsub = auth.onAuthStateChanged((u) => { setUser(u); setLoading(false); });
     return () => unsub();
   }, []);
  
   const signIn = async () => {
-    try {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      await auth.signInWithPopup(provider);
-    } catch (e) { alert("로그인 실패: " + e.message); }
+    try { const provider = new firebase.auth.GoogleAuthProvider(); await auth.signInWithPopup(provider); } catch (e) { alert("로그인 실패: " + e.message); }
   };
- 
   const signOut = async () => { await auth.signOut(); };
  
   if (loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#fafaf8",color:"#ccc",fontSize:12}}>불러오는 중...</div>;
- 
-  if (configError) return (
-    <div style={{maxWidth:420,margin:"60px auto",padding:"0 20px",fontFamily:"-apple-system,sans-serif"}}>
-      <div style={{background:"#fff",borderRadius:16,padding:28,boxShadow:"0 2px 20px rgba(0,0,0,0.06)"}}>
-        <div style={{fontSize:18,fontWeight:700,marginBottom:16}}>Firebase 설정 필요</div>
-        <div style={{fontSize:12,color:"#666",lineHeight:1.8}}>
-          이 앱을 사용하려면 Firebase 프로젝트 설정이 필요합니다.<br/><br/>
-          <strong>설정 방법:</strong><br/>
-          1. <a href="https://console.firebase.google.com" target="_blank" style={{color:"#1565c0"}}>Firebase Console</a> 에서 새 프로젝트 생성<br/>
-          2. Authentication → Google 로그인 활성화<br/>
-          3. Firestore Database → 데이터베이스 만들기 (테스트 모드)<br/>
-          4. 프로젝트 설정(⚙) → 내 앱 → 웹 앱 추가<br/>
-          5. 발급받은 <code style={{background:"#f0f0f0",padding:"1px 4px",borderRadius:3}}>firebaseConfig</code> 값을 이 HTML 파일 상단의 해당 부분에 붙여넣기<br/><br/>
-          <strong>Firestore 보안 규칙 (선택):</strong><br/>
-          테스트 모드 이후 아래 규칙으로 변경하면 본인 데이터만 접근 가능합니다:
-        </div>
-        <pre style={{background:"#f5f5f3",borderRadius:8,padding:12,fontSize:10,marginTop:10,overflow:"auto",lineHeight:1.6,color:"#444"}}>{`rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null
-                         && request.auth.uid == userId;
-    }
-  }
-}`}</pre>
-      </div>
-    </div>
-  );
+  if (configError) return <div style={{maxWidth:420,margin:"60px auto",padding:"0 20px"}}><div style={{background:"#fff",borderRadius:16,padding:28}}>Firebase 설정이 필요합니다.</div></div>;
  
   if (!user) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",background:"#fafaf8",gap:20}}>
       <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5}}>HAFS 주간 플래너</div>
       <div style={{fontSize:11,color:"#aaa"}}>로그인하면 어느 기기에서든 동기화됩니다</div>
-      <button onClick={signIn} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 28px",background:"#fff",border:"1px solid #ddd",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",transition:"all 0.15s"}}>
+      <button onClick={signIn} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 28px",background:"#fff",border:"1px solid #ddd",borderRadius:12,fontSize:13,fontWeight:600,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
         Google로 로그인
       </button>
@@ -230,31 +335,31 @@ function MainApp({ user, signOut }) {
   const [weekKey, setWeekKey] = useState(getCurrentWeekKey);
   const [weekNotes, setWeekNotes] = useState({});
   const [weekBlocks, setWeekBlocks] = useState(EMPTY_BLOCKS);
+  const [ddays, setDdays] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [weekLoaded, setWeekLoaded] = useState(false);
  
   const userId = user.uid;
  
-  // Debounced save
   const saveTimer = useRef({});
   const debouncedSave = useCallback((key, val) => {
     if (saveTimer.current[key]) clearTimeout(saveTimer.current[key]);
     saveTimer.current[key] = setTimeout(() => saveData(userId, key, val), 500);
   }, [userId]);
  
-  // Load global data
   useEffect(() => {
     Promise.all([
       loadData(userId, "todos", []),
       loadData(userId, "timetable", null),
-    ]).then(([t, tt]) => {
+      loadData(userId, "ddays", []),
+    ]).then(([t, tt, dd]) => {
       setTodos(t);
       if (tt) setTimetable(tt);
+      setDdays(dd);
       setLoaded(true);
     });
   }, [userId]);
  
-  // Load week data
   useEffect(() => {
     setWeekLoaded(false);
     Promise.all([
@@ -263,9 +368,9 @@ function MainApp({ user, signOut }) {
     ]).then(([n, b]) => { setWeekNotes(n); setWeekBlocks(b); setWeekLoaded(true); });
   }, [weekKey, userId]);
  
-  // Save effects
   useEffect(() => { if (loaded) debouncedSave("todos", todos); }, [todos, loaded]);
   useEffect(() => { if (loaded) debouncedSave("timetable", timetable); }, [timetable, loaded]);
+  useEffect(() => { if (loaded) debouncedSave("ddays", ddays); }, [ddays, loaded]);
   useEffect(() => { if (weekLoaded) debouncedSave("notes-" + weekKey, weekNotes); }, [weekNotes, weekLoaded, weekKey]);
   useEffect(() => { if (weekLoaded) debouncedSave("blocks-" + weekKey, weekBlocks); }, [weekBlocks, weekLoaded, weekKey]);
  
@@ -276,9 +381,9 @@ function MainApp({ user, signOut }) {
   return (
     <div style={{maxWidth:tab==="overview"?1200:480,margin:"0 auto",minHeight:"100vh",background:"#fafaf8",display:"flex",flexDirection:"column",position:"relative",transition:"max-width 0.3s"}}>
       <div style={{flex:1,overflow:"auto",paddingBottom:56}}>
-        {tab === "timetable" && <TimetableTab timetable={timetable} setTimetable={setTimetable} notes={weekNotes} setNotes={setWeekNotes} customBlocks={weekBlocks} setCustomBlocks={setWeekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} user={user} signOut={signOut} />}
+        {tab === "timetable" && <TimetableTab timetable={timetable} setTimetable={setTimetable} notes={weekNotes} setNotes={setWeekNotes} customBlocks={weekBlocks} setCustomBlocks={setWeekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} user={user} signOut={signOut} ddays={ddays} setDdays={setDdays} />}
         {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
-        {tab === "overview" && <OverviewTab timetable={timetable} notes={weekNotes} customBlocks={weekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} todos={todos} setTodos={setTodos} />}
+        {tab === "overview" && <OverviewTab timetable={timetable} notes={weekNotes} customBlocks={weekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} todos={todos} setTodos={setTodos} ddays={ddays} setDdays={setDdays} />}
       </div>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:tab==="overview"?1200:480,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(20px)",borderTop:"1px solid #eee",display:"flex",zIndex:100}}>
         {[{id:"timetable",label:"시간표"},{id:"overview",label:"전체 보기"},{id:"todo",label:"TO DO LIST"}].map((t) => (
@@ -290,7 +395,7 @@ function MainApp({ user, signOut }) {
 }
  
 /* ════════════ TIMETABLE ════════════ */
-function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCustomBlocks,weekKey,setWeekKey,isCurrentWeek,user,signOut}) {
+function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCustomBlocks,weekKey,setWeekKey,isCurrentWeek,user,signOut,ddays,setDdays}) {
   const initDay = () => { const n = new Date(); if (n.getHours() < 5) n.setDate(n.getDate() - 1); const d = n.getDay(); return d===0?6:d-1; };
   const [selDay,setSelDay] = useState(initDay);
   const scrollRef = useRef(null);
@@ -359,6 +464,9 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
           <button onClick={()=>goWeek(1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
         </div>
       </div>
+ 
+      {/* ── D-Day Banner ── */}
+      <DdayBanner ddays={ddays} setDdays={setDdays} />
  
       <div style={{display:"flex",background:"#fff",borderBottom:"1px solid #eee",flexShrink:0}}>
         {DAY_NAMES.map((d,i)=>{const wd=weekDates[i];const isTodayTab=wd&&wd.full===todayStr;return(
@@ -438,7 +546,6 @@ function TodoTab({todos,setTodos}) {
   const toggleTodo=(id)=>setTodos(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const removeTodo=(id)=>{setTodos(p=>p.filter(t=>t.id!==id));if(editId===id)cancelForm();};
  
-  // Build date filter buttons: 오늘 + next 6 days + 완료
   const buildDateFilters = () => {
     const filters = [["yesterday","어제"],["today","오늘"]];
     const base = new Date();
@@ -495,7 +602,7 @@ function TodoTab({todos,setTodos}) {
 ReactDOM.createRoot(document.getElementById("root")).render(<AuthWrapper />);
  
 /* ════════════ OVERVIEW ════════════ */
-function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentWeek,todos,setTodos}) {
+function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentWeek,todos,setTodos,ddays,setDdays}) {
   const todayStr = getToday();
   const weekDates = getWeekDates(weekKey);
   const toggleTodo = (id) => setTodos((p) => p.map((t) => t.id === id ? {...t, done: !t.done} : t));
@@ -517,15 +624,14 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
     return result;
   };
  
-  const activeTodos = todos.filter(t=>!t.done).sort((a,b)=>{
-    if(a.color!==b.color)return(a.color||"").localeCompare(b.color||"");
-    return(a.title||"").localeCompare(b.title||"","ko");
+  const sortedDdays = [...ddays].sort((a,b) => {
+    const da = parseInt(calcDday(a.date).replace("D-","").replace("D+","").replace("D-DAY","0"));
+    const db = parseInt(calcDday(b.date).replace("D-","").replace("D+","").replace("D-DAY","0"));
+    return da - db;
   });
-  const doneTodos = todos.filter(t=>t.done);
  
   return (
     <div style={{padding:"16px 12px"}}>
-      {/* Week nav */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,background:"#222",color:"#fff",borderRadius:12,padding:"12px 16px"}}>
         <button onClick={()=>setWeekKey(shiftWeek(weekKey,-1))} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
         <div style={{textAlign:"center"}}>
@@ -536,7 +642,27 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
         <button onClick={()=>setWeekKey(shiftWeek(weekKey,1))} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
       </div>
  
-      {/* Week grid */}
+      {/* D-Day summary in overview */}
+      {ddays.length > 0 && (
+        <div style={{marginBottom:14,background:"#fff",borderRadius:10,padding:"10px 12px",boxShadow:"0 1px 4px rgba(0,0,0,0.03)"}}>
+          <div style={{fontSize:9,fontWeight:700,color:"#ccc",letterSpacing:0.5,marginBottom:6}}>D-DAY</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {sortedDdays.map(item => {
+              const ddStr = calcDday(item.date);
+              const col = item.color || "#ef9a9a";
+              const isPast = ddStr.startsWith("D+");
+              return (
+                <div key={item.id} style={{display:"flex",alignItems:"center",gap:4,background:"#fafaf8",borderRadius:6,padding:"4px 8px",border:"1px solid #eee",opacity:isPast?0.4:1}}>
+                  {item.pinned && <span style={{fontSize:8,color:col}}>★</span>}
+                  <span style={{fontSize:9,color:"#555"}}>{item.label}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:col,fontFamily:"monospace"}}>{ddStr}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+ 
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:16}}>
         {DAY_NAMES.map((d,i) => {
           const wd = weekDates[i];
@@ -545,18 +671,30 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
           const dayTodos = wd ? todos.filter(t => t.date === wd.full) : [];
           const dayActiveTodos = dayTodos.filter(t => !t.done).sort((a,b) => (a.title||"").localeCompare(b.title||"","ko"));
           const dayDoneTodos = dayTodos.filter(t => t.done);
+          const dayDdays = wd ? ddays.filter(item => item.date === wd.full) : [];
  
           return (
             <div key={i} style={{background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.03)",overflow:"hidden",border:isToday?"2px solid #222":"2px solid transparent"}}>
-              {/* Day header */}
               <div style={{padding:"8px 8px 6px",borderBottom:"1px solid #f0f0ee",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:11,fontWeight:700,color:i>=5?"#c0a0a0":"#222"}}>{d}</span>
                 <span style={{fontSize:9,fontFamily:"monospace",color:isToday?"#fff":"#bbb",background:isToday?"#222":"transparent",borderRadius:6,padding:isToday?"1px 5px":"0",fontWeight:isToday?700:400}}>{wd?wd.day:""}</span>
               </div>
  
-              {/* Blocks */}
+              {/* D-Day badges on this day */}
+              {dayDdays.length > 0 && (
+                <div style={{padding:"3px 6px 0",display:"flex",flexDirection:"column",gap:2}}>
+                  {dayDdays.map(item => (
+                    <div key={item.id} style={{display:"flex",alignItems:"center",gap:3,background:item.color+"22",borderRadius:4,padding:"2px 5px"}}>
+                      <div style={{width:3,height:3,borderRadius:"50%",background:item.color,flexShrink:0}} />
+                      <span style={{fontSize:8,fontWeight:700,color:item.color}}>{item.label}</span>
+                      <span style={{fontSize:8,fontWeight:700,color:item.color,fontFamily:"monospace",marginLeft:"auto"}}>D-DAY</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+ 
               <div style={{padding:"4px 6px 4px",display:"flex",flexDirection:"column",gap:3,minHeight:60}}>
-                {blocks.length===0 && dayTodos.length===0 && <div style={{fontSize:8,color:"#ddd",textAlign:"center",padding:"20px 0"}}>일정 없음</div>}
+                {blocks.length===0 && dayTodos.length===0 && dayDdays.length===0 && <div style={{fontSize:8,color:"#ddd",textAlign:"center",padding:"20px 0"}}>일정 없음</div>}
                 {blocks.map((b,bi) => {
                   const sc = b.type==="class" ? (SC[b.subj]||SC.etc) : null;
                   const color = b.type==="class" ? (b.customColor||sc.fg) : b.color;
@@ -575,7 +713,6 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
                 })}
               </div>
  
-              {/* Per-day todos */}
               {dayTodos.length > 0 && (
                 <div style={{padding:"4px 6px 8px",borderTop:"1px dashed #eee"}}>
                   <div style={{fontSize:7,fontWeight:700,color:"#ccc",marginBottom:3,letterSpacing:0.5}}>TO DO</div>
@@ -599,10 +736,10 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
           );
         })}
       </div>
- 
     </div>
   );
 }
 </script>
 </body>
 </html>
+ 
