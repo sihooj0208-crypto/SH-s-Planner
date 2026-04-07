@@ -865,11 +865,11 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                 const slotBase = hi * SLOTS_PER_HOUR;
                 const label = String(h).padStart(2,"0") + ":00";
                 return (
-                  <div key={h} style={{display:"flex",alignItems:"stretch",borderBottom:"1px solid #eee",minHeight:20}}>
+                  <div key={h} style={{display:"flex",alignItems:"center",borderBottom:"1px solid #eee"}}>
                     {/* 시간 레이블 */}
                     <div style={{width:34,flexShrink:0,fontSize:7,color:"#bbb",fontFamily:"monospace",paddingTop:2,lineHeight:1}}>{label}</div>
                     {/* 6개 10분 셀 */}
-                    <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:1,padding:"2px 0"}}>
+                    <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:1,padding:"1px 0",maxWidth:"100%"}}>
                       {[0,1,2,3,4,5].map(s => {
                         const absSlot = slotBase + s;
                         const uBlock = getBlockAtSlot(absSlot);
@@ -882,7 +882,7 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                           const cellsInRow = Math.min(uBlock.start + uBlock.len - absSlot, SLOTS_PER_HOUR - s);
                           return (
                             <div key={s} onClick={()=>setEditingBlock(uBlock)}
-                              style={{gridColumn:`span ${cellsInRow}`,aspectRatio:""+cellsInRow+"/1",background:uBlock.color,borderRadius:5,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",minWidth:0}}>
+                              style={{gridColumn:`span ${cellsInRow}`,aspectRatio:""+cellsInRow+"/1",maxHeight:10,background:uBlock.color,borderRadius:4,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",minWidth:0}}>
                               {cellsInRow >= 3 && uBlock.label && <span style={{fontSize:6,color:"rgba(0,0,0,0.45)",padding:"0 2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{uBlock.label}</span>}
                             </div>
                           );
@@ -890,12 +890,12 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                         if (ttBlock && !uBlock && isTtStart) {
                           const cellsInRow = Math.min(ttBlock.end - absSlot, SLOTS_PER_HOUR - s);
                           return (
-                            <div key={s} style={{gridColumn:`span ${cellsInRow}`,aspectRatio:""+cellsInRow+"/1",background:"#e0e0de",borderRadius:5,overflow:"hidden",display:"flex",alignItems:"center",minWidth:0}}>
+                            <div key={s} style={{gridColumn:`span ${cellsInRow}`,aspectRatio:""+cellsInRow+"/1",maxHeight:10,background:"#e0e0de",borderRadius:4,overflow:"hidden",display:"flex",alignItems:"center",minWidth:0}}>
                               {cellsInRow >= 3 && <span style={{fontSize:6,color:"#aaa",padding:"0 2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ttBlock.name}</span>}
                             </div>
                           );
                         }
-                        return <div key={s} style={{aspectRatio:"1/1",border:"0.5px solid #eee",borderRadius:3}} />;
+                        return <div key={s} style={{aspectRatio:"1/1",width:"100%",maxHeight:10,border:"0.5px solid #eee",borderRadius:2}} />;
                       })}
                     </div>
                   </div>
