@@ -407,7 +407,7 @@ function MainApp({ user, signOut }) {
         {tab === "timetable" && <TimetableTab timetable={timetable} setTimetable={setTimetable} notes={weekNotes} setNotes={setWeekNotes} customBlocks={weekBlocks} setCustomBlocks={setWeekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} user={user} signOut={signOut} ddays={ddays} setDdays={setDdays} />}
         {tab === "todo" && <TodoTab todos={todos} setTodos={setTodos} />}
         {tab === "overview" && <OverviewTab timetable={timetable} notes={weekNotes} customBlocks={weekBlocks} weekKey={weekKey} setWeekKey={setWeekKey} isCurrentWeek={isCurrentWeek} todos={todos} setTodos={setTodos} ddays={ddays} setDdays={setDdays} />}
-        {tab === "studyplan" && <StudyPlanTab ddays={ddays} studyPlans={studyPlans} loadStudyPlan={loadStudyPlan} saveStudyPlan={saveStudyPlan} />}
+        {tab === "studyplan" && <StudyPlanTab ddays={ddays} studyPlans={studyPlans} loadStudyPlan={loadStudyPlan} saveStudyPlan={saveStudyPlan} todos={todos} timetable={timetable} />}
       </div>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:tab==="overview"?1200:tab==="studyplan"?520:480,background:"rgba(255,255,255,0.96)",backdropFilter:"blur(20px)",borderTop:"1px solid #eee",display:"flex",zIndex:100}}>
         {[{id:"timetable",label:"시간표"},{id:"overview",label:"전체 보기"},{id:"todo",label:"TO DO"},{id:"studyplan",label:"STUDY PLAN"}].map((t) => (
@@ -624,19 +624,54 @@ function TodoTab({todos,setTodos}) {
 }
 
 /* ════════════ STUDY PLAN ════════════ */
-const SP_COLORS = ["#f5b8b8","#f5d6b8","#f5f0b8","#b8f5c2","#b8d6f5","#c8b8f5","#f5b8e8","#d0d0d0"];
-const SP_HOUR_COLS = 4; // number of 15-min columns per hour slot
+/* 10분 단위 = 6칸/hour, 총 24시간 = 144 슬롯 (04:00 ~ 03:50) */
+const MINS_PER_SLOT = 10;
+const SLOTS_PER_HOUR = 6;
+const TOTAL_SLOTS = 24 * SLOTS_PER_HOUR; // 144
 
-function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan }) {
+/* 슬롯 인덱스 → HH:MM */
+const slotToTime = (idx) => {
+  const totalMins = 4 * 60 + idx * MINS_PER_SLOT;
+  const h = Math.floor(totalMins / 60) % 24;
+  const m = totalMins % 60;
+  return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+};
+
+/* HH:MM → 슬롯 인덱스 (기준: 04:00) */
+const timeToSlot = (timeStr) => {
+  const [hh, mm] = timeStr.split(":").map(Number);
+  const totalMins = hh * 60 + mm;
+  const baseMins = 4 * 60;
+  let diff = totalMins - baseMins;
+  if (diff < 0) diff += 24 * 60;
+  return Math.round(diff / MINS_PER_SLOT);
+};
+
+/* 시간표 수업 → 슬롯 범위 (회색 자동 채우기용) */
+const getTimetableSlots = (timetable, dayIdx) => {
+  if (dayIdx >= 5) return [];
+  const classes = timetable[dayIdx] || [];
+  const result = [];
+  for (let i = 0; i < 8; i++) {
+    const p = PERIODS[i];
+    if (!p || !classes[i]) continue;
+    const s = timeToSlot(p.start);
+    const e = timeToSlot(p.end);
+    result.push({ start: s, end: e, name: classes[i][0], subj: classes[i][3] });
+  }
+  return result;
+};
+
+function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, timetable }) {
   const [selDate, setSelDate] = useState(getToday());
+  const [addForm, setAddForm] = useState(null); // { start:"", end:"", todoId:"" } or null
+  const [editingBlock, setEditingBlock] = useState(null);
 
   useEffect(() => { loadStudyPlan(selDate); }, [selDate]);
 
-  const plan = studyPlans[selDate] || { memo:"", tasks:[], comment:"", blocks:[] };
-
+  const plan = studyPlans[selDate] || { memo:"", comment:"", blocks:[] };
   const update = (patch) => saveStudyPlan(selDate, { ...plan, ...patch });
 
-  // Navigate days
   const shiftDay = (d) => {
     const dt = new Date(selDate + "T12:00:00");
     dt.setDate(dt.getDate() + d);
@@ -646,88 +681,69 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan }) {
   const todayStr = getToday();
   const dateObj = new Date(selDate + "T12:00:00");
   const weekDayNames = ["일","월","화","수","목","금","토"];
+  const dayIdx = dateObj.getDay() === 0 ? 6 : dateObj.getDay() - 1;
   const dateLabel = (dateObj.getMonth()+1) + "월 " + dateObj.getDate() + "일 " + weekDayNames[dateObj.getDay()] + "요일";
   const isToday = selDate === todayStr;
 
-  // Tasks
-  const addTask = () => {
-    const tasks = [...(plan.tasks||[]), { id: uid(), cat:"", text:"", done:false, color: SP_COLORS[0] }];
-    update({ tasks });
-  };
-  const updateTask = (id, patch) => update({ tasks: (plan.tasks||[]).map(t => t.id===id ? {...t,...patch} : t) });
-  const removeTask = (id) => update({ tasks: (plan.tasks||[]).filter(t => t.id!==id) });
+  /* ── Tasks: 오늘 날짜의 To Do List 항목 연동 ── */
+  const dayTodos = todos.filter(t => t.date === selDate);
 
-  // Time blocks: array of { row, col, len, color, label }
-  // row = hour index (0=04:00), col = 0-3 (15min slots), len = number of 15min cells
-  const HOURS = [];
-  for(let h=4;h<24;h++) HOURS.push(h);
-  for(let h=0;h<=3;h++) HOURS.push(h);  // 24 hours total
+  /* ── Timetable auto-blocks (회색) ── */
+  const ttSlots = getTimetableSlots(timetable, dayIdx);
 
+  /* ── User blocks ── */
   const blocks = plan.blocks || [];
-  const [drawing, setDrawing] = useState(null); // {startRow, startCol}
-  const [drawEnd, setDrawEnd] = useState(null);
-  const [drawColor, setDrawColor] = useState(SP_COLORS[0]);
-  const [editingBlock, setEditingBlock] = useState(null);
 
-  // Grid cell key: "row-col"
-  const getCellBlock = (row, col) => {
+  /* 슬롯에 해당하는 블록 찾기 */
+  const getBlockAtSlot = (slot) => {
     for (const b of blocks) {
-      const startCell = b.row * 4 + b.col;
-      const cellPos = row * 4 + col;
-      if (cellPos >= startCell && cellPos < startCell + b.len) return b;
+      if (slot >= b.start && slot < b.start + b.len) return b;
+    }
+    return null;
+  };
+  const getTtAtSlot = (slot) => {
+    for (const t of ttSlots) {
+      if (slot >= t.start && slot < t.end) return t;
     }
     return null;
   };
 
-  const onCellMouseDown = (row, col) => {
-    const existing = getCellBlock(row, col);
-    if (existing) { setEditingBlock(existing); return; }
-    setDrawing({ row, col });
-    setDrawEnd({ row, col });
-  };
-  const onCellMouseEnter = (row, col) => {
-    if (!drawing) return;
-    setDrawEnd({ row, col });
-  };
-  const onMouseUp = () => {
-    if (!drawing || !drawEnd) { setDrawing(null); setDrawEnd(null); return; }
-    const startCell = drawing.row * 4 + drawing.col;
-    const endCell = drawEnd.row * 4 + drawEnd.col;
-    const minCell = Math.min(startCell, endCell);
-    const maxCell = Math.max(startCell, endCell);
-    const newBlock = {
-      id: uid(),
-      row: Math.floor(minCell / 4),
-      col: minCell % 4,
-      len: maxCell - minCell + 1,
-      color: drawColor,
-      label: ""
-    };
-    // Remove overlapping blocks
-    const newBlocks = (blocks || []).filter(b => {
-      const bs = b.row*4+b.col, be = bs+b.len-1;
-      return be < minCell || bs > maxCell;
+  /* ── Add block from form ── */
+  const submitAddForm = () => {
+    if (!addForm || !addForm.start || !addForm.end) return;
+    const s = timeToSlot(addForm.start);
+    const e = timeToSlot(addForm.end);
+    if (e <= s) return;
+    const todo = dayTodos.find(t => t.id === addForm.todoId);
+    const color = todo ? todo.color : "#d0d0d0";
+    const label = todo ? todo.title : (addForm.label||"");
+    const newBlock = { id: uid(), start: s, len: e - s, color, label, todoId: addForm.todoId||"" };
+    const filtered = blocks.filter(b => {
+      const bs = b.start, be = bs + b.len - 1;
+      return be < s || bs >= e;
     });
-    update({ blocks: [...newBlocks, newBlock] });
-    setDrawing(null); setDrawEnd(null);
+    update({ blocks: [...filtered, newBlock] });
+    setAddForm(null);
   };
 
   const removeBlock = (id) => { update({ blocks: blocks.filter(b=>b.id!==id) }); setEditingBlock(null); };
-  const updateBlockLabel = (id, label) => { update({ blocks: blocks.map(b=>b.id===id?{...b,label}:b) }); };
-  const updateBlockColor = (id, color) => { update({ blocks: blocks.map(b=>b.id===id?{...b,color}:b) }); setEditingBlock(b => b ? {...b, color} : b); };
 
-  // Compute total study time (non-meal, non-grey blocks)
-  const mealColors = [SP_COLORS[7]]; // grey = meal/break
-  const studyBlocks = blocks.filter(b => !mealColors.includes(b.color));
-  const totalMin = studyBlocks.reduce((s,b) => s + b.len * 15, 0);
+  /* ── Total study time ── */
+  const studyBlocks = blocks.filter(b => b.color !== "#d0d0d0" && b.color !== "#c8c8c8");
+  const totalMin = studyBlocks.reduce((s,b) => s + b.len * MINS_PER_SLOT, 0);
   const totalH = Math.floor(totalMin/60);
   const totalM = totalMin % 60;
 
-  // Pinned D-Days
+  /* ── D-Days ── */
   const activeDdays = ddays.filter(d => !calcDday(d.date).startsWith("D+")).sort((a,b)=>new Date(a.date)-new Date(b.date));
 
+  /* ── Hour rows for timetable ── */
+  const HOUR_ROWS = [];
+  for (let h = 4; h < 24; h++) HOUR_ROWS.push(h);
+  for (let h = 0; h <= 3; h++) HOUR_ROWS.push(h);
+
   return (
-    <div style={{padding:"0 0 80px",fontFamily:"-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif",background:"#fafaf8",minHeight:"100vh"}}>
+    <div style={{paddingBottom:80,background:"#fafaf8",minHeight:"100vh"}}>
       {/* Header */}
       <div style={{background:"#222",color:"#fff",padding:"14px 16px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <button onClick={()=>shiftDay(-1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
@@ -739,77 +755,42 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan }) {
         <button onClick={()=>shiftDay(1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
       </div>
 
-      <div style={{display:"flex",gap:0,padding:"0"}}>
-        {/* LEFT COLUMN */}
-        <div style={{flex:"0 0 50%",borderRight:"1px solid #e8e6e2",background:"#fff"}}>
-
+      <div style={{display:"flex",background:"#fff"}}>
+        {/* ═══ LEFT ═══ */}
+        <div style={{flex:"0 0 50%",borderRight:"1px solid #eee"}}>
           {/* DATE */}
           <div style={{borderBottom:"1px solid #eee",padding:"10px 14px 8px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>DATE</div>
             <div style={{fontSize:11,color:"#444",textAlign:"center"}}>{dateLabel}</div>
           </div>
-
           {/* MEMO */}
           <div style={{borderBottom:"1px solid #eee",padding:"10px 14px 8px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>MEMO</div>
-            <textarea
-              value={plan.memo||""}
-              onChange={e=>update({memo:e.target.value})}
-              placeholder="오늘의 한마디..."
-              style={{width:"100%",border:"none",background:"transparent",fontSize:10,color:"#e57373",fontWeight:500,outline:"none",resize:"none",lineHeight:1.5,minHeight:32,textAlign:"center"}}
-            />
+            <textarea value={plan.memo||""} onChange={e=>update({memo:e.target.value})} placeholder="오늘의 한마디..." style={{width:"100%",border:"none",background:"transparent",fontSize:10,color:"#e57373",fontWeight:500,outline:"none",resize:"none",lineHeight:1.5,minHeight:32,textAlign:"center"}} />
           </div>
-
-          {/* TASKS */}
-          <div style={{borderBottom:"1px solid #eee",padding:"10px 14px 8px",flex:1}}>
+          {/* TASKS — To Do List 연동 */}
+          <div style={{borderBottom:"1px solid #eee",padding:"10px 14px 8px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:6}}>TASKS</div>
-            {(plan.tasks||[]).map(t => (
-              <div key={t.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,borderBottom:"1px solid #f5f5f3",paddingBottom:4}}>
-                <div
-                  onClick={()=>{
-                    const colors = SP_COLORS;
-                    const ci = colors.indexOf(t.color);
-                    updateTask(t.id,{color:colors[(ci+1)%colors.length]});
-                  }}
-                  style={{width:11,height:11,borderRadius:"50%",background:t.color,flexShrink:0,cursor:"pointer"}}
-                />
-                <input
-                  value={t.cat||""}
-                  onChange={e=>updateTask(t.id,{cat:e.target.value})}
-                  placeholder="분류"
-                  style={{width:32,fontSize:9,border:"none",background:"transparent",color:"#999",outline:"none",flexShrink:0}}
-                />
-                <input
-                  value={t.text||""}
-                  onChange={e=>updateTask(t.id,{text:e.target.value})}
-                  placeholder="할 일"
-                  style={{flex:1,fontSize:10,border:"none",background:"transparent",color:t.done?"#ccc":"#333",textDecoration:t.done?"line-through":"none",outline:"none"}}
-                />
-                <span
-                  onClick={()=>updateTask(t.id,{done:!t.done})}
-                  style={{fontSize:10,color:t.done?"#e57373":"#ddd",cursor:"pointer",flexShrink:0,fontWeight:700}}
-                >{t.done?"V":"V"}</span>
-                <button onClick={()=>removeTask(t.id)} style={{background:"none",border:"none",cursor:"pointer",fontSize:11,color:"#ddd",padding:0,flexShrink:0}}>×</button>
+            {dayTodos.length === 0 && (
+              <div style={{fontSize:9,color:"#ccc",textAlign:"center",padding:"8px 0"}}>To Do List에서 오늘 날짜로 추가하세요</div>
+            )}
+            {dayTodos.map(t => (
+              <div key={t.id} style={{display:"flex",alignItems:"center",gap:6,marginBottom:4,borderBottom:"1px solid #f5f5f3",paddingBottom:4,opacity:t.done?0.4:1}}>
+                <div style={{width:10,height:10,borderRadius:"50%",background:t.color,flexShrink:0}} />
+                <span style={{flex:1,fontSize:10,color:t.done?"#ccc":"#333",textDecoration:t.done?"line-through":"none",lineHeight:1.3}}>{t.title}</span>
+                <span style={{fontSize:9,color:t.done?"#e57373":"#ddd",fontWeight:700}}>{t.done?"V":""}</span>
               </div>
             ))}
-            <button onClick={addTask} style={{marginTop:4,background:"none",border:"1px dashed #ddd",borderRadius:6,padding:"3px 10px",fontSize:9,color:"#bbb",cursor:"pointer",width:"100%"}}>+ 추가</button>
           </div>
-
           {/* COMMENT */}
           <div style={{padding:"10px 14px 8px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>COMMENT</div>
-            <textarea
-              value={plan.comment||""}
-              onChange={e=>update({comment:e.target.value})}
-              placeholder="오늘 하루 마무리..."
-              style={{width:"100%",border:"none",background:"transparent",fontSize:10,color:"#666",outline:"none",resize:"none",lineHeight:1.7,minHeight:80}}
-            />
+            <textarea value={plan.comment||""} onChange={e=>update({comment:e.target.value})} placeholder="오늘 하루 마무리..." style={{width:"100%",border:"none",background:"transparent",fontSize:10,color:"#666",outline:"none",resize:"none",lineHeight:1.7,minHeight:80}} />
           </div>
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div style={{flex:"0 0 50%",background:"#fff"}}>
-
+        {/* ═══ RIGHT ═══ */}
+        <div style={{flex:"0 0 50%"}}>
           {/* D-DAY */}
           <div style={{borderBottom:"1px solid #eee",padding:"10px 14px 8px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>D-DAY</div>
@@ -825,78 +806,99 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan }) {
               );
             })}
           </div>
-
           {/* TOTAL */}
           <div style={{borderBottom:"1px solid #eee",padding:"10px 14px 8px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>TOTAL</div>
             <div style={{fontSize:14,fontWeight:700,color:"#333",textAlign:"center",fontFamily:"monospace"}}>
-              {totalH > 0 ? totalH + "H " : ""}{totalM > 0 ? totalM + "M" : totalH===0?"0M":""}
+              {totalH>0?totalH+"H ":""}{totalM>0?totalM+"M":totalH===0?"0M":""}
             </div>
           </div>
-
-          {/* Color picker for drawing */}
-          <div style={{borderBottom:"1px solid #eee",padding:"6px 14px"}}>
-            <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>COLOR</div>
-            <div style={{display:"flex",gap:4,alignItems:"center"}}>
-              {SP_COLORS.map(c=>(
-                <div key={c} onClick={()=>setDrawColor(c)}
-                  style={{width:16,height:16,borderRadius:4,background:c,cursor:"pointer",border:drawColor===c?"2px solid #222":"2px solid transparent",flexShrink:0}}
-                />
-              ))}
-              <span style={{fontSize:7,color:"#ccc",marginLeft:4}}>드래그로 그리기</span>
+          {/* ADD BLOCK */}
+          <div style={{borderBottom:"1px solid #eee",padding:"8px 14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:addForm?6:0}}>
+              <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb"}}>TIME BLOCK 추가</div>
+              {!addForm && <button onClick={()=>setAddForm({start:"09:00",end:"09:50",todoId:"",label:""})} style={{fontSize:9,background:"#222",color:"#fff",border:"none",borderRadius:6,padding:"3px 8px",cursor:"pointer"}}>+ 추가</button>}
             </div>
+            {addForm && (
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                <div style={{display:"flex",gap:5}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:7,color:"#bbb",marginBottom:2}}>시작</div>
+                    <input type="time" value={addForm.start} onChange={e=>setAddForm(f=>({...f,start:e.target.value}))} style={{width:"100%",padding:"4px 5px",border:"1px solid #e8e8e8",borderRadius:6,fontSize:10,outline:"none"}} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:7,color:"#bbb",marginBottom:2}}>끝</div>
+                    <input type="time" value={addForm.end} onChange={e=>setAddForm(f=>({...f,end:e.target.value}))} style={{width:"100%",padding:"4px 5px",border:"1px solid #e8e8e8",borderRadius:6,fontSize:10,outline:"none"}} />
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:7,color:"#bbb",marginBottom:2}}>항목 (To Do List 연동)</div>
+                  <select value={addForm.todoId} onChange={e=>setAddForm(f=>({...f,todoId:e.target.value}))} style={{width:"100%",padding:"4px 5px",border:"1px solid #e8e8e8",borderRadius:6,fontSize:10,outline:"none",background:"#fff"}}>
+                    <option value="">— 직접 입력 —</option>
+                    {dayTodos.filter(t=>!t.done).map(t=>(
+                      <option key={t.id} value={t.id}>{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+                {!addForm.todoId && (
+                  <input value={addForm.label||""} onChange={e=>setAddForm(f=>({...f,label:e.target.value}))} placeholder="라벨 (예: 식사, 휴식...)" style={{width:"100%",padding:"4px 5px",border:"1px solid #e8e8e8",borderRadius:6,fontSize:10,outline:"none"}} />
+                )}
+                {/* Color preview */}
+                {(addForm.todoId || addForm.label) && (
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <div style={{width:10,height:10,borderRadius:3,background:dayTodos.find(t=>t.id===addForm.todoId)?.color||"#d0d0d0"}} />
+                    <span style={{fontSize:9,color:"#999"}}>{addForm.todoId ? dayTodos.find(t=>t.id===addForm.todoId)?.title : addForm.label}</span>
+                  </div>
+                )}
+                <div style={{display:"flex",gap:5}}>
+                  <button onClick={submitAddForm} style={{flex:1,padding:"6px 0",background:"#222",color:"#fff",border:"none",borderRadius:6,fontSize:10,fontWeight:600,cursor:"pointer"}}>추가</button>
+                  <button onClick={()=>setAddForm(null)} style={{padding:"6px 10px",background:"#f0f0f0",color:"#888",border:"none",borderRadius:6,fontSize:10,cursor:"pointer"}}>취소</button>
+                </div>
+              </div>
+            )}
           </div>
-
           {/* TIME TABLE */}
-          <div style={{padding:"8px 14px 8px 10px"}}>
+          <div style={{padding:"8px 10px 8px 10px",overflowY:"auto"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>TIME TABLE</div>
-            <div
-              style={{userSelect:"none",WebkitUserSelect:"none"}}
-              onMouseLeave={()=>{if(drawing){setDrawing(null);setDrawEnd(null);}}}
-              onMouseUp={onMouseUp}
-              onTouchEnd={onMouseUp}
-            >
-              {HOURS.map((h,row) => {
-                const label = h < 10 ? "0"+h+":00" : h+":00";
+            <div style={{position:"relative"}}>
+              {HOUR_ROWS.map((h, hi) => {
+                const slotBase = hi * SLOTS_PER_HOUR;
+                const label = String(h).padStart(2,"0") + ":00";
                 return (
-                  <div key={h} style={{display:"flex",alignItems:"stretch",height:20,borderBottom:"1px solid #f0efec"}}>
-                    <div style={{width:36,fontSize:8,color:"#bbb",fontFamily:"monospace",flexShrink:0,display:"flex",alignItems:"center",paddingRight:4}}>{label}</div>
-                    {[0,1,2,3].map(col=>{
-                      const b = getCellBlock(row,col);
-                      const isDrawn = drawing && drawEnd && (() => {
-                        const sc = drawing.row*4+drawing.col, ec=drawEnd.row*4+drawEnd.col;
-                        const mn=Math.min(sc,ec), mx=Math.max(sc,ec);
-                        const cc=row*4+col;
-                        return cc>=mn&&cc<=mx;
-                      })();
-                      const bg = isDrawn ? drawColor : (b ? b.color : "transparent");
-                      const isBlockStart = b && b.row===row && b.col===col;
-                      return (
-                        <div
-                          key={col}
-                          onMouseDown={()=>onCellMouseDown(row,col)}
-                          onMouseEnter={()=>onCellMouseEnter(row,col)}
-                          onTouchStart={(e)=>{e.preventDefault();onCellMouseDown(row,col);}}
-                          onTouchMove={(e)=>{
-                            e.preventDefault();
-                            const touch=e.touches[0];
-                            const el=document.elementFromPoint(touch.clientX,touch.clientY);
-                            if(el&&el.dataset.row!==undefined){onCellMouseEnter(parseInt(el.dataset.row),parseInt(el.dataset.col));}
-                          }}
-                          data-row={row} data-col={col}
-                          style={{
-                            flex:1,background:bg,borderRight:col<3?"1px solid #f0efec":"none",
-                            borderRadius:col===0&&b&&b.col===0?4:col===3||( b&&b.col+b.len-1===col)?4:0,
-                            cursor:"crosshair",position:"relative",overflow:"hidden",
-                            display:"flex",alignItems:"center"
-                          }}
-                        >
-                          {isBlockStart && b.label && (
-                            <span style={{fontSize:7,color:"rgba(0,0,0,0.45)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",padding:"0 2px",pointerEvents:"none"}}>{b.label}</span>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div key={h} style={{display:"flex",borderBottom:"1px solid #f0efec"}}>
+                    <div style={{width:34,fontSize:7,color:"#bbb",fontFamily:"monospace",flexShrink:0,padding:"2px 3px 0 0",lineHeight:"20px"}}>{label}</div>
+                    <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+                      {[0,1,2,3,4,5].map(slot => {
+                        const absSlot = slotBase + slot;
+                        const userBlock = getBlockAtSlot(absSlot);
+                        const ttBlock = getTtAtSlot(absSlot);
+                        const isTtStart = ttBlock && ttBlock.start === absSlot;
+                        const isUserStart = userBlock && userBlock.start === absSlot;
+                        const isHour = slot === 0;
+                        const bg = userBlock ? userBlock.color : (ttBlock ? "#e0e0de" : "transparent");
+                        return (
+                          <div
+                            key={slot}
+                            onClick={() => { if(userBlock && userBlock.start===absSlot) setEditingBlock(userBlock); }}
+                            style={{
+                              height: 8,
+                              background: bg,
+                              borderBottom: slot===5 ? "none" : (slot===2?"1px dashed #eee":"1px solid #f8f7f4"),
+                              position:"relative",
+                              cursor: userBlock ? "pointer" : "default",
+                              borderRadius: isUserStart ? "2px 2px 0 0" : (userBlock && userBlock.start+userBlock.len-1===absSlot ? "0 0 2px 2px" : 0)
+                            }}
+                          >
+                            {isTtStart && !userBlock && (
+                              <span style={{position:"absolute",left:2,top:0,fontSize:6,color:"#aaa",lineHeight:"8px",whiteSpace:"nowrap",overflow:"hidden",maxWidth:"90%",pointerEvents:"none"}}>{ttBlock.name}</span>
+                            )}
+                            {isUserStart && (
+                              <span style={{position:"absolute",left:2,top:0,fontSize:6,color:"rgba(0,0,0,0.5)",lineHeight:"8px",whiteSpace:"nowrap",overflow:"hidden",maxWidth:"90%",pointerEvents:"none"}}>{userBlock.label}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
@@ -909,22 +911,8 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan }) {
       {editingBlock && (
         <div style={{position:"fixed",bottom:66,left:10,right:10,maxWidth:460,margin:"0 auto",background:"#fff",borderRadius:14,padding:14,boxShadow:"0 -4px 20px rgba(0,0,0,0.10)",border:"1px solid #eee",zIndex:60}}>
           <div style={{fontSize:11,fontWeight:700,marginBottom:8}}>블록 수정</div>
-          <input
-            value={editingBlock.label||""}
-            onChange={e=>{updateBlockLabel(editingBlock.id,e.target.value);setEditingBlock(b=>({...b,label:e.target.value}));}}
-            placeholder="라벨 (예: 아침식사, 공부...)"
-            style={{width:"100%",padding:"6px 9px",border:"1.5px solid #e8e8e8",borderRadius:8,fontSize:11,outline:"none",marginBottom:8}}
-          />
-          <div style={{marginBottom:8}}>
-            <div style={{fontSize:8,color:"#aaa",marginBottom:4}}>색상</div>
-            <div style={{display:"flex",gap:5}}>
-              {SP_COLORS.map(c=>(
-                <div key={c} onClick={()=>updateBlockColor(editingBlock.id,c)}
-                  style={{width:22,height:22,borderRadius:5,background:c,cursor:"pointer",border:editingBlock.color===c?"2px solid #222":"2px solid transparent"}}
-                />
-              ))}
-            </div>
-          </div>
+          <div style={{fontSize:9,color:"#999",marginBottom:8}}>{slotToTime(editingBlock.start)} ~ {slotToTime(editingBlock.start+editingBlock.len)} · {editingBlock.len*MINS_PER_SLOT}분</div>
+          <input value={editingBlock.label||""} onChange={e=>{const v=e.target.value;setEditingBlock(b=>({...b,label:v}));update({blocks:blocks.map(b=>b.id===editingBlock.id?{...b,label:v}:b)});}} placeholder="라벨" style={{width:"100%",padding:"6px 9px",border:"1.5px solid #e8e8e8",borderRadius:8,fontSize:11,outline:"none",marginBottom:8}} />
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>removeBlock(editingBlock.id)} style={{flex:1,padding:8,background:"#fee",color:"#e57373",border:"1px solid #fcc",borderRadius:8,fontSize:11,cursor:"pointer"}}>삭제</button>
             <button onClick={()=>setEditingBlock(null)} style={{flex:1,padding:8,background:"#222",color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer"}}>완료</button>
@@ -934,6 +922,7 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan }) {
     </div>
   );
 }
+
 
 ReactDOM.createRoot(document.getElementById("root")).render(<AuthWrapper />);
 
