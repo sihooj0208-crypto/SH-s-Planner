@@ -869,25 +869,20 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                     {/* 시간 레이블 */}
                     <div style={{width:34,flexShrink:0,fontSize:7,color:"#bbb",fontFamily:"monospace",paddingTop:2,lineHeight:1}}>{label}</div>
                     {/* 6개 10분 셀 */}
-                    <div style={{flex:1,display:"flex",gap:1,padding:"2px 0"}}>
+                    <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:1,padding:"2px 0"}}>
                       {[0,1,2,3,4,5].map(s => {
                         const absSlot = slotBase + s;
                         const uBlock = getBlockAtSlot(absSlot);
                         const ttBlock = getTtAtSlot(absSlot);
                         const isUStart = uBlock && uBlock.start === absSlot;
                         const isTtStart = ttBlock && ttBlock.start === absSlot;
-                        /* 블록이 이 슬롯에서 시작하면 가로로 len칸만큼 span */
-                        if (uBlock && !isUStart) return null; // 이미 앞 셀에서 렌더됨
+                        if (uBlock && !isUStart) return null;
                         if (ttBlock && !uBlock && !isTtStart) return null;
                         if (uBlock && isUStart) {
-                          /* 이 행 안에서 남은 칸 수 계산 */
-                          const maxLen = SLOTS_PER_HOUR - s;
-                          const spanLen = Math.min(uBlock.len - Math.max(0, absSlot - uBlock.start), maxLen);
-                          /* 여러 행에 걸치면 각 행에서 잘라서 렌더 */
                           const cellsInRow = Math.min(uBlock.start + uBlock.len - absSlot, SLOTS_PER_HOUR - s);
                           return (
                             <div key={s} onClick={()=>setEditingBlock(uBlock)}
-                              style={{flex:cellsInRow,background:uBlock.color,borderRadius:5,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",minWidth:0,minHeight:16}}>
+                              style={{gridColumn:`span ${cellsInRow}`,aspectRatio:""+cellsInRow+"/1",background:uBlock.color,borderRadius:5,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",minWidth:0}}>
                               {cellsInRow >= 3 && uBlock.label && <span style={{fontSize:6,color:"rgba(0,0,0,0.45)",padding:"0 2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{uBlock.label}</span>}
                             </div>
                           );
@@ -895,13 +890,12 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                         if (ttBlock && !uBlock && isTtStart) {
                           const cellsInRow = Math.min(ttBlock.end - absSlot, SLOTS_PER_HOUR - s);
                           return (
-                            <div key={s} style={{flex:cellsInRow,background:"#e0e0de",borderRadius:5,overflow:"hidden",display:"flex",alignItems:"center",minWidth:0,minHeight:16}}>
+                            <div key={s} style={{gridColumn:`span ${cellsInRow}`,aspectRatio:""+cellsInRow+"/1",background:"#e0e0de",borderRadius:5,overflow:"hidden",display:"flex",alignItems:"center",minWidth:0}}>
                               {cellsInRow >= 3 && <span style={{fontSize:6,color:"#aaa",padding:"0 2px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ttBlock.name}</span>}
                             </div>
                           );
                         }
-                        /* 빈 셀 */
-                        return <div key={s} style={{flex:1,border:"0.5px solid #eee",borderRadius:3,minHeight:16}} />;
+                        return <div key={s} style={{aspectRatio:"1/1",border:"0.5px solid #eee",borderRadius:3}} />;
                       })}
                     </div>
                   </div>
