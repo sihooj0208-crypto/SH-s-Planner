@@ -24,7 +24,7 @@
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
- 
+
 const firebaseConfig = {
   apiKey: "AIzaSyCiTfzo9PtB3dmfStD4p3qzBY1ilVdFh0A",
   authDomain: "planner-30b23.firebaseapp.com",
@@ -34,11 +34,11 @@ const firebaseConfig = {
   appId: "1:817608939373:web:7045b3a52e1c6efeaeac64",
   measurementId: "G-N2NRDYFPYB"
 };
- 
+
 const app = firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
- 
+
 function getUserDoc(userId, key) {
   return db.collection("users").doc(userId).collection("data").doc(key);
 }
@@ -48,14 +48,14 @@ async function loadData(userId, key, fallback) {
 async function saveData(userId, key, val) {
   try { await getUserDoc(userId, key).set({ value: val, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }); } catch (e) {}
 }
- 
+
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const toLocalDateStr = (d) => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 const getToday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return toLocalDateStr(d); };
 const getTomorrow = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() + 1); return toLocalDateStr(d); };
 const getYesterday = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); d.setDate(d.getDate() - 1); return toLocalDateStr(d); };
 const fmtDate = (d) => { const o = new Date(d + "T12:00:00"); return (o.getMonth() + 1) + "." + String(o.getDate()).padStart(2, "0"); };
- 
+
 const toMin = (t) => {
   const parts = t.split(":");
   const h = parseInt(parts[0]);
@@ -63,9 +63,9 @@ const toMin = (t) => {
   const adj = h < 6 ? h + 24 : h;
   return (adj - 6) * 60 + m;
 };
- 
+
 const PX = 1.1;
- 
+
 const getMonday = (d) => {
   const date = new Date(d);
   const day = date.getDay();
@@ -73,21 +73,21 @@ const getMonday = (d) => {
   date.setDate(date.getDate() + diff);
   return toLocalDateStr(date);
 };
- 
+
 const getCurrentWeekKey = () => { const d = new Date(); if (d.getHours() < 5) d.setDate(d.getDate() - 1); return getMonday(d); };
 const shiftWeek = (weekKey, delta) => { const d = new Date(weekKey + "T12:00:00"); d.setDate(d.getDate() + delta * 7); return toLocalDateStr(d); };
- 
+
 const getWeekDates = (weekKey) => {
   const dates = [];
   for (let i = 0; i < 7; i++) { const d = new Date(weekKey + "T12:00:00"); d.setDate(d.getDate() + i); dates.push({ month: d.getMonth() + 1, day: d.getDate(), full: toLocalDateStr(d) }); }
   return dates;
 };
- 
+
 const getWeekLabel = (weekKey) => {
   const mon = new Date(weekKey + "T12:00:00"); const sun = new Date(weekKey + "T12:00:00"); sun.setDate(sun.getDate() + 6);
   return (mon.getMonth() + 1) + "." + mon.getDate() + " - " + (sun.getMonth() + 1) + "." + sun.getDate();
 };
- 
+
 /* D-Day 계산 (오늘 기준) */
 const calcDday = (dateStr) => {
   const today = new Date(getToday() + "T00:00:00");
@@ -97,7 +97,7 @@ const calcDday = (dateStr) => {
   if (diff > 0) return "D-" + diff;
   return "D+" + Math.abs(diff);
 };
- 
+
 /* D-Day 계산 (특정 날짜 기준) */
 const calcDdayFrom = (targetDateStr, fromDateStr) => {
   const from = new Date(fromDateStr + "T00:00:00");
@@ -107,9 +107,9 @@ const calcDdayFrom = (targetDateStr, fromDateStr) => {
   if (diff > 0) return "D-" + diff;
   return "D+" + Math.abs(diff);
 };
- 
+
 const COLORS = ["#222","#777","#aaa","#ef9a9a","#e57373","#c62828","#ffcc80","#ffab91","#e65100","#fff59d","#ffe082","#f57f17","#a5d6a7","#81c784","#2e7d32","#80cbc4","#4db6ac","#00695c","#90caf9","#64b5f6","#1565c0","#b39ddb","#9575cd","#283593","#ce93d8","#ba68c8","#6a1b9a","#f48fb1","#f06292","#ad1457","#bcaaa4","#a1887f","#4e342e"];
- 
+
 const SUBJ_LIST = [
   { key: "ai", label: "AI" },{ key: "math", label: "수학" },{ key: "kor", label: "국어" },
   { key: "sci", label: "과학" },{ key: "eng", label: "영어" },{ key: "soc", label: "사회" },
@@ -117,22 +117,22 @@ const SUBJ_LIST = [
   { key: "music", label: "음악" },{ key: "ca", label: "CA" },{ key: "brk", label: "창체" },
   { key: "etc", label: "기타" },
 ];
- 
+
 const PASTEL_COLORS = ["#fdfd96","#f5e642","#e6c800","#d4a017","#f0d5c0","#f0b088","#f08080","#d5d880","#90d090","#80e0c8","#a8d8f0","#90b0e0","#b8a8d0","#f0a0d0","#f0b0c0","#a89880","#b0a068","#c8c8c8","#606878"];
- 
+
 const SC = {
   ai:{fg:"#66bb6a"},sci:{fg:"#8bc34a"},math:{fg:"#64b5f6"},kor:{fg:"#ffd54f"},
   eng:{fg:"#ef9a9a"},soc:{fg:"#b39ddb"},han:{fg:"#bbb"},pe:{fg:"#a1887f"},
   foreign:{fg:"#80cbc4"},music:{fg:"#ce93d8"},ca:{fg:"#bbb"},brk:{fg:"#ccc"},etc:{fg:"#aaa"},
 };
- 
+
 const PERIODS = [
   {p:1,start:"09:00",end:"09:50"},{p:2,start:"10:00",end:"10:50"},
   {p:3,start:"11:00",end:"11:50"},{p:4,start:"12:00",end:"12:50"},
   {p:5,start:"14:00",end:"14:50"},{p:6,start:"15:00",end:"15:50"},
   {p:7,start:"16:00",end:"16:50"},{p:8,start:"16:50",end:"17:40"},
 ];
- 
+
 const DEFAULT_TT = {
   0:[["AI 1","최종우T","D202","ai"],["과학 3","정연화T","","sci"],["수학 3","한정우T","","math"],["한문 3","오정숙T","","han"],["영어 3","이소라T","","eng"],["국어 1","정가영T","","kor"],["창체","","","brk"],["창체","","","brk"]],
   1:[["국어 3","이성호T","","kor"],["AI 2","윤태선T","","ai"],["사회 1","이대일T","","soc"],["과학탐구","이규현T","D305","sci"],["영어 1","이주현AT","","eng"],["외국어 2","김은경·조경호T","","foreign"],["한문 2","이중호T","","han"],["창체","","","brk"]],
@@ -140,23 +140,23 @@ const DEFAULT_TT = {
   3:[["수학 2","곽동환T","","math"],["국어 4","이성호T","","kor"],["과학 1","김영민T","","sci"],["사회 3","이현주T","","soc"],["외국어 3","김은경·김리향T","","foreign"],["음악 2","박민형T","","music"],["CA","","","ca"],["CA","","","ca"]],
   4:[["수학 4","한정우T","","math"],["영어 2","김민경T","","eng"],["외국어 1","김은경·조경호T","","foreign"],["체육 2","이영도T","","pe"],["음악 1","박민형T","","music"],["사회 2","이주현BT","","soc"],["창체","","","brk"],["창체","","","brk"]],
 };
- 
+
 const DAY_NAMES = ["월","화","수","목","금","토","일"];
 const EMPTY_BLOCKS = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
- 
+
 /* ════════════ D-DAY BANNER ════════════ */
 function DdayBanner({ ddays, setDdays }) {
   const [showManager, setShowManager] = useState(false);
   const [form, setForm] = useState({ label: "", date: getToday(), color: "#ef9a9a", pinned: false });
   const [editId, setEditId] = useState(null);
- 
+
   const sorted = [...ddays].sort((a, b) => {
     if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
     return new Date(a.date) - new Date(b.date);
   });
- 
+
   const resetForm = () => { setForm({ label: "", date: getToday(), color: "#ef9a9a", pinned: false }); setEditId(null); };
- 
+
   const saveDday = () => {
     if (!form.label.trim() || !form.date) return;
     if (editId) {
@@ -166,15 +166,15 @@ function DdayBanner({ ddays, setDdays }) {
     }
     resetForm();
   };
- 
+
   const startEdit = (item) => {
     setForm({ label: item.label, date: item.date, color: item.color || "#ef9a9a", pinned: item.pinned || false });
     setEditId(item.id);
   };
- 
+
   const removeDday = (id) => { setDdays(p => p.filter(d => d.id !== id)); if (editId === id) resetForm(); };
   const togglePin = (id) => setDdays(p => p.map(d => d.id === id ? { ...d, pinned: !d.pinned } : d));
- 
+
   const getDdayStyle = (diff) => {
     if (diff === "D-DAY") return "#c62828";
     const n = parseInt(diff.replace("D-","").replace("D+",""));
@@ -182,7 +182,7 @@ function DdayBanner({ ddays, setDdays }) {
     if (diff.startsWith("D+")) return "#aaa";
     return "#555";
   };
- 
+
   return (
     <div style={{ background: "#1a1a1a", padding: "8px 14px 10px" }}>
       {/* Scrollable D-Day chips */}
@@ -219,14 +219,14 @@ function DdayBanner({ ddays, setDdays }) {
           );
         })}
       </div>
- 
+
       {/* Manager panel */}
       {showManager && (
         <div style={{ marginTop: 10, background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 12, border: "1px solid rgba(255,255,255,0.08)" }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 8 }}>
             {editId ? "D-Day 수정" : "D-Day 추가"}
           </div>
- 
+
           {/* Form */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
             <input
@@ -274,7 +274,7 @@ function DdayBanner({ ddays, setDdays }) {
               <button onClick={resetForm} style={{ padding: "7px 10px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 7, fontSize: 10, color: "rgba(255,255,255,0.4)", cursor: "pointer" }}>취소</button>
             </div>
           </div>
- 
+
           {/* List */}
           {sorted.length > 0 && (
             <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -302,27 +302,27 @@ function DdayBanner({ ddays, setDdays }) {
     </div>
   );
 }
- 
+
 /* ════════════ AUTH WRAPPER ════════════ */
 function AuthWrapper() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [configError, setConfigError] = useState(false);
- 
+
   useEffect(() => {
     if (firebaseConfig.apiKey === "여기에-API-KEY-입력") { setConfigError(true); setLoading(false); return; }
     const unsub = auth.onAuthStateChanged((u) => { setUser(u); setLoading(false); });
     return () => unsub();
   }, []);
- 
+
   const signIn = async () => {
     try { const provider = new firebase.auth.GoogleAuthProvider(); await auth.signInWithPopup(provider); } catch (e) { alert("로그인 실패: " + e.message); }
   };
   const signOut = async () => { await auth.signOut(); };
- 
+
   if (loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#fafaf8",color:"#ccc",fontSize:12}}>불러오는 중...</div>;
   if (configError) return <div style={{maxWidth:420,margin:"60px auto",padding:"0 20px"}}><div style={{background:"#fff",borderRadius:16,padding:28}}>Firebase 설정이 필요합니다.</div></div>;
- 
+
   if (!user) return (
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100vh",background:"#fafaf8",gap:20}}>
       <div style={{fontSize:22,fontWeight:700,letterSpacing:-0.5}}>HAFS 주간 플래너</div>
@@ -333,10 +333,10 @@ function AuthWrapper() {
       </button>
     </div>
   );
- 
+
   return <MainApp user={user} signOut={signOut} />;
 }
- 
+
 /* ════════════ MAIN APP ════════════ */
 function MainApp({ user, signOut }) {
   const [tab, setTab] = useState("timetable");
@@ -349,15 +349,15 @@ function MainApp({ user, signOut }) {
   const [studyPlans, setStudyPlans] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [weekLoaded, setWeekLoaded] = useState(false);
- 
+
   const userId = user.uid;
- 
+
   const saveTimer = useRef({});
   const debouncedSave = useCallback((key, val) => {
     if (saveTimer.current[key]) clearTimeout(saveTimer.current[key]);
     saveTimer.current[key] = setTimeout(() => saveData(userId, key, val), 500);
   }, [userId]);
- 
+
   useEffect(() => {
     Promise.all([
       loadData(userId, "todos", []),
@@ -370,19 +370,19 @@ function MainApp({ user, signOut }) {
       setLoaded(true);
     });
   }, [userId]);
- 
+
   // Load study plan data per-day (lazy: loaded when tab opens, stored in studyPlans keyed by date)
   const loadStudyPlan = useCallback(async (dateStr) => {
     if (studyPlans[dateStr] !== undefined) return;
     const data = await loadData(userId, "studyplan-" + dateStr, null);
     setStudyPlans(p => ({ ...p, [dateStr]: data || { memo:"", tasks:[], comment:"", blocks:[] } }));
   }, [userId, studyPlans]);
- 
+
   const saveStudyPlan = useCallback((dateStr, val) => {
     setStudyPlans(p => ({ ...p, [dateStr]: val }));
     debouncedSave("studyplan-" + dateStr, val);
   }, [debouncedSave]);
- 
+
   useEffect(() => {
     setWeekLoaded(false);
     Promise.all([
@@ -390,17 +390,17 @@ function MainApp({ user, signOut }) {
       loadData(userId, "blocks-" + weekKey, EMPTY_BLOCKS),
     ]).then(([n, b]) => { setWeekNotes(n); setWeekBlocks(b); setWeekLoaded(true); });
   }, [weekKey, userId]);
- 
+
   useEffect(() => { if (loaded) debouncedSave("todos", todos); }, [todos, loaded]);
   useEffect(() => { if (loaded) debouncedSave("timetable", timetable); }, [timetable, loaded]);
   useEffect(() => { if (loaded) debouncedSave("ddays", ddays); }, [ddays, loaded]);
   useEffect(() => { if (weekLoaded) debouncedSave("notes-" + weekKey, weekNotes); }, [weekNotes, weekLoaded, weekKey]);
   useEffect(() => { if (weekLoaded) debouncedSave("blocks-" + weekKey, weekBlocks); }, [weekBlocks, weekLoaded, weekKey]);
- 
+
   if (!loaded || !weekLoaded) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#fafaf8",color:"#ccc",fontSize:12}}>불러오는 중...</div>;
- 
+
   const isCurrentWeek = weekKey === getCurrentWeekKey();
- 
+
   return (
     <div style={{maxWidth:tab==="overview"?1200:tab==="studyplan"?520:480,margin:"0 auto",minHeight:"100vh",background:"#fafaf8",display:"flex",flexDirection:"column",position:"relative",transition:"max-width 0.3s"}}>
       <div style={{flex:1,overflow:"auto",paddingBottom:56}}>
@@ -417,7 +417,7 @@ function MainApp({ user, signOut }) {
     </div>
   );
 }
- 
+
 /* ════════════ TIMETABLE ════════════ */
 function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCustomBlocks,weekKey,setWeekKey,isCurrentWeek,user,signOut,ddays,setDdays}) {
   const initDay = () => { const n = new Date(); if (n.getHours() < 5) n.setDate(n.getDate() - 1); const d = n.getDay(); return d===0?6:d-1; };
@@ -426,30 +426,30 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
   const isWeekend = selDay >= 5;
   const weekDates = getWeekDates(weekKey);
   const todayStr = getToday();
- 
+
   const [adding,setAdding] = useState(false);
   const [editingBlock,setEditingBlock] = useState(null);
   const [form,setForm] = useState({title:"",start:"18:00",end:"21:00",color:"#888"});
   const [editingClass,setEditingClass] = useState(null);
   const [classForm,setClassForm] = useState({name:"",teacher:"",room:"",subj:"etc",color:""});
   const [showSettings,setShowSettings] = useState(false);
- 
+
   useEffect(()=>{if(scrollRef.current)scrollRef.current.scrollTop=toMin("08:00")*PX;},[selDay,weekKey]);
- 
+
   const goWeek=(delta)=>{setWeekKey(shiftWeek(weekKey,delta));setAdding(false);setEditingBlock(null);setEditingClass(null);};
- 
+
   const saveBlock=()=>{if(!form.title.trim())return;if(editingBlock){setCustomBlocks(p=>({...p,[selDay]:(p[selDay]||[]).map(b=>b.id===editingBlock?{...b,title:form.title.trim(),start:form.start,end:form.end,color:form.color}:b)}));setEditingBlock(null);}else{setCustomBlocks(p=>({...p,[selDay]:[...(p[selDay]||[]),{id:uid(),title:form.title.trim(),start:form.start,end:form.end,color:form.color}]}));}setForm({title:"",start:"18:00",end:"21:00",color:"#888"});setAdding(false);};
   const startEditBlock=(b)=>{setForm({title:b.title,start:b.start,end:b.end,color:b.color||"#888"});setEditingBlock(b.id);setAdding(true);setEditingClass(null);};
   const removeBlock=(id)=>{setCustomBlocks(p=>({...p,[selDay]:(p[selDay]||[]).filter(b=>b.id!==id)}));if(editingBlock===id){setAdding(false);setEditingBlock(null);}};
   const cancelBlockForm=()=>{setAdding(false);setEditingBlock(null);setForm({title:"",start:"18:00",end:"21:00",color:"#888"});};
- 
+
   const startEditClass=(pi)=>{const cls=timetable[selDay]&&timetable[selDay][pi];if(cls){setClassForm({name:cls[0],teacher:cls[1],room:cls[2],subj:cls[3],color:cls[4]||""});}else{setClassForm({name:"",teacher:"",room:"",subj:"etc",color:""});}setEditingClass(pi);setAdding(false);setEditingBlock(null);};
   const saveClass=()=>{if(!classForm.name.trim())return;setTimetable(p=>{const u={...p};const a=[...(u[selDay]||Array(8).fill(null))];a[editingClass]=[classForm.name.trim(),classForm.teacher.trim(),classForm.room.trim(),classForm.subj,classForm.color||""];u[selDay]=a;return u;});setEditingClass(null);};
   const deleteClass=(pi)=>{setTimetable(p=>{const u={...p};const a=[...(u[selDay]||Array(8).fill(null))];a[pi]=null;u[selDay]=a;return u;});if(editingClass===pi)setEditingClass(null);};
   const cancelClassForm=()=>{setEditingClass(null);};
   const resetTimetable=()=>{setTimetable(JSON.parse(JSON.stringify(DEFAULT_TT)));setShowSettings(false);};
   const updateNote=(key,value)=>setNotes(p=>({...p,[key]:value}));
- 
+
   const buildBlocks=()=>{
     if(isWeekend)return[];const classes=timetable[selDay]||[];const result=[];
     result.push({type:"free",start:"06:00",end:"09:00",label:"아침"});
@@ -459,13 +459,13 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
     if(i===3){result.push({type:"lunch",start:"12:50",end:"14:00"});}
     else if(i<7){const np=PERIODS[i+1];if(np&&period.end!==np.start)result.push({type:"gap",start:period.end,end:np.start});}}
     result.push({type:"free",start:"17:40",end:"03:00",label:"저녁"});return result;};
- 
+
   const scheduleBlocks=buildBlocks();
   const userBlocks=(customBlocks[selDay]||[]).sort((a,b)=>toMin(a.start)-toMin(b.start));
   const totalHeight=21*60*PX;
   const hourLabels=[];for(let h=6;h<24;h++)hourLabels.push(h);for(let h=0;h<=3;h++)hourLabels.push(h);
   const formatHour=(h)=>{if(h===0)return"12AM";if(h<12)return h+"AM";if(h===12)return"12PM";return(h-12)+"PM";};
- 
+
   return(
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 56px)"}}>
       <div style={{background:"#222",color:"#fff",padding:"14px 16px 10px",flexShrink:0}}>
@@ -488,10 +488,10 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
           <button onClick={()=>goWeek(1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
         </div>
       </div>
- 
+
       {/* ── D-Day Banner ── */}
       <DdayBanner ddays={ddays} setDdays={setDdays} />
- 
+
       <div style={{display:"flex",background:"#fff",borderBottom:"1px solid #eee",flexShrink:0}}>
         {DAY_NAMES.map((d,i)=>{const wd=weekDates[i];const isTodayTab=wd&&wd.full===todayStr;return(
           <button key={i} onClick={()=>{setSelDay(i);setEditingClass(null);setAdding(false);}} style={{flex:1,padding:"7px 0 5px",border:"none",background:"transparent",cursor:"pointer",borderBottom:selDay===i?"2px solid #222":"2px solid transparent",transition:"all 0.15s",display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
@@ -499,14 +499,14 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
             <span style={{fontSize:8,fontFamily:"monospace",color:isTodayTab?"#fff":selDay===i?"#888":"#ccc",background:isTodayTab?"#222":"transparent",borderRadius:8,padding:isTodayTab?"1px 5px":"1px 2px",fontWeight:isTodayTab?700:400}}>{wd?wd.day:""}</span>
           </button>);})}
       </div>
- 
+
       <div ref={scrollRef} style={{flex:1,overflow:"auto",background:"#fafaf8",position:"relative"}}>
         <div style={{position:"relative",height:totalHeight,minHeight:"100%"}}>
           {hourLabels.map((h)=>{const y=toMin(String(h).padStart(2,"0")+":00")*PX;return(
             <div key={h} style={{position:"absolute",top:y,left:0,right:0,display:"flex",alignItems:"flex-start",pointerEvents:"none"}}>
               <div style={{width:40,textAlign:"right",paddingRight:6,fontSize:8,color:"#ccc",fontFamily:"monospace",fontWeight:500,marginTop:-5,flexShrink:0}}>{formatHour(h)}</div>
               <div style={{flex:1,borderTop:"1px solid #eeece8"}} /></div>);})}
- 
+
           <div style={{position:"absolute",top:0,left:44,right:6,bottom:0}}>
             {!isWeekend&&scheduleBlocks.map((b,i)=>{
               const top=toMin(b.start)*PX;const height=(toMin(b.end)-toMin(b.start))*PX;
@@ -522,7 +522,7 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
               if(b.type==="gap"&&height>8){return<div key={"s"+i} style={{position:"absolute",top,left:0,right:0,height,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{width:2,height:2,borderRadius:"50%",background:"#ddd"}} /></div>;}
               if(b.type==="free"){const nk=selDay+"-f-"+b.label;return(<div key={"s"+i} style={{position:"absolute",top,left:0,right:0,height,borderRadius:6,padding:"5px 7px",display:"flex",flexDirection:"column"}}><div style={{display:"flex",justifyContent:"space-between",flexShrink:0}}><span style={{fontSize:9,fontWeight:600,color:"#d0d0cc"}}>{b.label}</span><span style={{fontSize:7,color:"#ddd",fontFamily:"monospace"}}>{b.start}-{b.end}</span></div><textarea value={notes[nk]||""} onChange={(e)=>updateNote(nk,e.target.value)} placeholder="자유 시간..." style={{flex:1,marginTop:3,background:"transparent",border:"1px dashed #e8e6e2",borderRadius:4,padding:"2px 5px",fontSize:9,color:"#999",outline:"none",resize:"none",lineHeight:1.4,minHeight:0}} /></div>);}
               return null;})}
- 
+
             {userBlocks.map((b)=>{const top=toMin(b.start)*PX;const height=Math.max((toMin(b.end)-toMin(b.start))*PX,30);const nk="u-"+selDay+"-"+b.id;const bc=b.color||"#888";
               return(<div key={b.id} style={{position:"absolute",top,left:0,right:0,height,background:"#fff",borderLeft:"3px solid "+bc,borderRadius:6,padding:"5px 7px",display:"flex",flexDirection:"column",zIndex:2,boxShadow:"0 1px 3px rgba(0,0,0,0.03)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexShrink:0}}>
@@ -532,9 +532,9 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
               </div>);})}
           </div>
         </div>
- 
+
         {!adding&&editingClass===null&&(<div style={{position:"fixed",bottom:66,right:16,zIndex:50}}><button onClick={()=>{cancelBlockForm();cancelClassForm();setAdding(true);}} style={{width:42,height:42,borderRadius:12,background:"#222",color:"#fff",border:"none",fontSize:20,cursor:"pointer",boxShadow:"0 4px 14px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button></div>)}
- 
+
         {adding&&(<div style={{position:"fixed",bottom:58,left:10,right:10,maxWidth:460,margin:"0 auto",background:"#fff",borderRadius:14,padding:14,boxShadow:"0 -4px 20px rgba(0,0,0,0.08)",border:"1px solid #eee",zIndex:60}}>
           <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>{editingBlock?"블록 수정":"블록 추가"}</div>
           <input value={form.title} onChange={(e)=>setForm(f=>({...f,title:e.target.value}))} placeholder="제목 (예: 학원, 자습...)" autoFocus style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e8e8e8",borderRadius:8,fontSize:11,outline:"none",marginBottom:6}} />
@@ -542,7 +542,7 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
           <div style={{marginBottom:8}}><div style={{fontSize:8,fontWeight:600,color:"#aaa",marginBottom:3}}>색상</div><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{PASTEL_COLORS.map((c)=>(<div key={c} onClick={()=>setForm(f=>({...f,color:c}))} style={{width:20,height:20,borderRadius:5,background:c,cursor:"pointer",border:form.color===c?"2px solid #222":"2px solid transparent",outline:form.color===c?"1.5px solid #fff":"none"}} />))}</div></div>
           <div style={{display:"flex",gap:6}}><button onClick={saveBlock} style={{flex:1,padding:8,background:"#222",color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer"}}>{editingBlock?"저장":"추가"}</button><button onClick={cancelBlockForm} style={{padding:"8px 12px",background:"#f0f0f0",color:"#888",border:"none",borderRadius:8,fontSize:11,cursor:"pointer"}}>취소</button></div>
         </div>)}
- 
+
         {editingClass!==null&&(<div style={{position:"fixed",bottom:58,left:10,right:10,maxWidth:460,margin:"0 auto",background:"#fff",borderRadius:14,padding:14,boxShadow:"0 -4px 20px rgba(0,0,0,0.08)",border:"1px solid #eee",zIndex:60}}>
           <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>{PERIODS[editingClass]?PERIODS[editingClass].p+"교시 수정":"수업 수정"}</div>
           <input value={classForm.name} onChange={(e)=>setClassForm(f=>({...f,name:e.target.value}))} placeholder="과목명" autoFocus style={{width:"100%",padding:"7px 9px",border:"1.5px solid #e8e8e8",borderRadius:8,fontSize:11,outline:"none",marginBottom:6}} />
@@ -554,14 +554,14 @@ function TimetableTab({timetable,setTimetable,notes,setNotes,customBlocks,setCus
       </div>
     </div>);
 }
- 
+
 /* ════════════ TODO ════════════ */
 function TodoTab({todos,setTodos}) {
   const [showAdd,setShowAdd]=useState(false);const [editId,setEditId]=useState(null);
   const [title,setTitle]=useState("");const [date,setDate]=useState(getToday());
   const [color,setColor]=useState("#90caf9");const [targetMin,setTargetMin]=useState("");
   const [filter,setFilter]=useState("all");
- 
+
   const resetForm=()=>{setTitle("");setDate(getToday());setColor("#90caf9");setTargetMin("");setEditId(null);};
   const openAdd=()=>{resetForm();setShowAdd(true);};
   const openEdit=(t)=>{setTitle(t.title);setDate(t.date);setColor(t.color);setTargetMin(t.tMin?String(t.tMin):"");setEditId(t.id);setShowAdd(true);};
@@ -569,7 +569,7 @@ function TodoTab({todos,setTodos}) {
   const cancelForm=()=>{setShowAdd(false);resetForm();};
   const toggleTodo=(id)=>setTodos(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const removeTodo=(id)=>{setTodos(p=>p.filter(t=>t.id!==id));if(editId===id)cancelForm();};
- 
+
   const buildDateFilters = () => {
     const filters = [["yesterday","어제"],["today","오늘"]];
     const base = new Date();
@@ -585,7 +585,7 @@ function TodoTab({todos,setTodos}) {
     return filters;
   };
   const dateFilters = buildDateFilters();
- 
+
   const filtered=todos.filter((t)=>{
     if(filter==="done")return t.done;
     if(filter==="today")return t.date===getToday();
@@ -593,7 +593,7 @@ function TodoTab({todos,setTodos}) {
     if(filter==="all")return true;
     return t.date===filter;
   }).sort((a,b)=>{if(a.done!==b.done)return a.done?1:-1;if(a.color!==b.color)return(a.color||"").localeCompare(b.color||"");return(a.title||"").localeCompare(b.title||"","ko");});
- 
+
   return(
     <div style={{padding:"16px 12px"}}>
       <div style={{marginBottom:2}}><div style={{fontSize:18,fontWeight:700,letterSpacing:0.5,fontFamily:"monospace"}}>TO DO LIST</div></div>
@@ -601,7 +601,7 @@ function TodoTab({todos,setTodos}) {
       <div style={{display:"flex",gap:4,marginBottom:12,overflowX:"auto",paddingBottom:4,WebkitOverflowScrolling:"touch"}}>
         {dateFilters.map(([k,l])=>(<button key={k} onClick={()=>setFilter(k)} style={{padding:"4px 11px",borderRadius:14,border:filter===k?"1.5px solid #222":"1.5px solid #e0e0e0",cursor:"pointer",fontSize:10,fontWeight:filter===k?700:400,whiteSpace:"nowrap",background:filter===k?"#222":"#fff",color:filter===k?"#fff":"#999",transition:"all 0.15s",flexShrink:0}}>{l}</button>))}
       </div>
- 
+
       {showAdd&&(<div style={{background:"#fff",borderRadius:12,boxShadow:"0 1px 6px rgba(0,0,0,0.03)",padding:14,marginBottom:10,border:"1.5px solid #222",overflow:"hidden"}}>
         <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>{editId?"수정":"새 할 일"}</div>
         <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="할 일을 입력하세요" autoFocus onKeyDown={(e)=>e.key==="Enter"&&saveTodo()} style={{width:"100%",padding:"8px 9px",border:"1.5px solid #e8e8e8",borderRadius:8,fontSize:11,outline:"none",marginBottom:6}} />
@@ -609,26 +609,26 @@ function TodoTab({todos,setTodos}) {
         <div style={{marginBottom:8}}><div style={{fontSize:8,fontWeight:600,color:"#aaa",marginBottom:3}}>색상</div><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{COLORS.map((c)=>(<div key={c} onClick={()=>setColor(c)} style={{width:20,height:20,borderRadius:5,background:c,cursor:"pointer",border:color===c?"2px solid #222":"2px solid transparent",outline:color===c?"1.5px solid #fff":"none"}} />))}</div></div>
         <div style={{display:"flex",gap:6}}><button onClick={saveTodo} style={{flex:1,padding:8,background:"#222",color:"#fff",border:"none",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer"}}>{editId?"저장":"추가"}</button><button onClick={cancelForm} style={{padding:"8px 12px",background:"#f0f0f0",color:"#888",border:"none",borderRadius:8,fontSize:11,cursor:"pointer"}}>취소</button></div>
       </div>)}
- 
+
       {filtered.length===0&&<div style={{textAlign:"center",padding:"36px 0",color:"#ddd",fontSize:11}}>항목이 없습니다</div>}
- 
+
       {filtered.map((t)=>(<div key={t.id} style={{display:"flex",alignItems:"stretch",marginBottom:5,background:"#fff",borderRadius:8,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.02)",opacity:t.done?0.4:1,transition:"opacity 0.2s"}}>
         <div style={{width:3,background:t.color,flexShrink:0}} />
         <div onClick={()=>toggleTodo(t.id)} style={{display:"flex",alignItems:"center",padding:"0 0 0 10px",cursor:"pointer",flexShrink:0}}><div style={{width:16,height:16,borderRadius:4,border:"1.5px solid "+(t.done?t.color:"#ddd"),background:t.done?t.color:"transparent",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>{t.done&&<span style={{color:"#fff",fontSize:9,fontWeight:700}}>✓</span>}</div></div>
         <div onClick={()=>openEdit(t)} style={{flex:1,padding:"9px 8px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}><div style={{flex:1,minWidth:0}}><div style={{fontSize:11,fontWeight:500,color:t.done?"#ccc":"#333",textDecoration:t.done?"line-through":"none",lineHeight:1.4}}>{t.title}</div><div style={{fontSize:8,color:"#ccc",marginTop:1}}>{fmtDate(t.date)}{t.tMin?"  ·  목표 "+t.tMin+"분":""}</div></div></div>
         <button onClick={(e)=>{e.stopPropagation();removeTodo(t.id);}} style={{background:"none",border:"none",cursor:"pointer",padding:"0 8px",fontSize:13,color:"#ddd",flexShrink:0}}>×</button>
       </div>))}
- 
+
       {!showAdd&&(<div style={{position:"fixed",bottom:66,right:16,zIndex:50}}><button onClick={openAdd} style={{width:42,height:42,borderRadius:12,background:"#222",color:"#fff",border:"none",fontSize:20,cursor:"pointer",boxShadow:"0 4px 14px rgba(0,0,0,0.2)",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button></div>)}
     </div>);
 }
- 
+
 /* ════════════ STUDY PLAN ════════════ */
 /* 10분 단위 = 6칸/hour, 총 24시간 = 144 슬롯 (04:00 ~ 03:50) */
 const MINS_PER_SLOT = 10;
 const SLOTS_PER_HOUR = 6;
 const TOTAL_SLOTS = 24 * SLOTS_PER_HOUR; // 144
- 
+
 /* 슬롯 인덱스 → HH:MM */
 const slotToTime = (idx) => {
   const totalMins = 4 * 60 + idx * MINS_PER_SLOT;
@@ -636,7 +636,7 @@ const slotToTime = (idx) => {
   const m = totalMins % 60;
   return String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
 };
- 
+
 /* HH:MM → 슬롯 인덱스 (기준: 04:00) */
 const timeToSlot = (timeStr) => {
   const [hh, mm] = timeStr.split(":").map(Number);
@@ -646,7 +646,7 @@ const timeToSlot = (timeStr) => {
   if (diff < 0) diff += 24 * 60;
   return Math.round(diff / MINS_PER_SLOT);
 };
- 
+
 /* 시간표 수업 → 슬롯 범위 (회색 자동 채우기용) */
 const getTimetableSlots = (timetable, dayIdx) => {
   if (dayIdx >= 5) return [];
@@ -661,30 +661,30 @@ const getTimetableSlots = (timetable, dayIdx) => {
   }
   return result;
 };
- 
+
 function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, timetable }) {
   const [selDate, setSelDate] = useState(getToday());
   const [addForm, setAddForm] = useState(null); // { start:"", end:"", todoId:"" } or null
   const [editingBlock, setEditingBlock] = useState(null);
- 
+
   useEffect(() => { loadStudyPlan(selDate); }, [selDate]);
- 
+
   const plan = studyPlans[selDate] || { memo:"", comment:"", blocks:[] };
   const update = (patch) => saveStudyPlan(selDate, { ...plan, ...patch });
- 
+
   const shiftDay = (d) => {
     const dt = new Date(selDate + "T12:00:00");
     dt.setDate(dt.getDate() + d);
     setSelDate(toLocalDateStr(dt));
   };
- 
+
   const todayStr = getToday();
   const dateObj = new Date(selDate + "T12:00:00");
   const weekDayNames = ["일","월","화","수","목","금","토"];
   const dayIdx = dateObj.getDay() === 0 ? 6 : dateObj.getDay() - 1;
   const dateLabel = (dateObj.getMonth()+1) + "월 " + dateObj.getDate() + "일 " + weekDayNames[dateObj.getDay()] + "요일";
   const isToday = selDate === todayStr;
- 
+
   /* ── Tasks: 오늘 날짜의 To Do List 항목 연동 ── */
   const dayTodos = todos
     .filter(t => t.date === selDate)
@@ -693,13 +693,13 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
       if(a.color !== b.color) return (a.color||"").localeCompare(b.color||"");
       return (a.title||"").localeCompare(b.title||"","ko");
     });
- 
+
   /* ── Timetable auto-blocks (회색) ── */
   const ttSlots = getTimetableSlots(timetable, dayIdx);
- 
+
   /* ── User blocks ── */
   const blocks = plan.blocks || [];
- 
+
   /* 슬롯에 해당하는 블록 찾기 */
   const getBlockAtSlot = (slot) => {
     for (const b of blocks) {
@@ -713,7 +713,7 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
     }
     return null;
   };
- 
+
   /* ── Add block from form ── */
   const submitAddForm = () => {
     if (!addForm || !addForm.start || !addForm.end) return;
@@ -731,23 +731,23 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
     update({ blocks: [...filtered, newBlock] });
     setAddForm(null);
   };
- 
+
   const removeBlock = (id) => { update({ blocks: blocks.filter(b=>b.id!==id) }); setEditingBlock(null); };
- 
+
   /* ── Total study time ── */
   const studyBlocks = blocks.filter(b => b.color !== "#d0d0d0" && b.color !== "#c8c8c8");
   const totalMin = studyBlocks.reduce((s,b) => s + b.len * MINS_PER_SLOT, 0);
   const totalH = Math.floor(totalMin/60);
   const totalM = totalMin % 60;
- 
+
   /* ── D-Days ── */
   const activeDdays = ddays.filter(d => !calcDday(d.date).startsWith("D+")).sort((a,b)=>new Date(a.date)-new Date(b.date));
- 
+
   /* ── Hour rows for timetable ── */
   const HOUR_ROWS = [];
   for (let h = 4; h < 24; h++) HOUR_ROWS.push(h);
   for (let h = 0; h <= 3; h++) HOUR_ROWS.push(h);
- 
+
   return (
     <div style={{paddingBottom:80,background:"#fafaf8",minHeight:"100vh"}}>
       {/* Header */}
@@ -760,7 +760,7 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
         </div>
         <button onClick={()=>shiftDay(1)} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
       </div>
- 
+
       <div style={{display:"flex",background:"#fff"}}>
         {/* ═══ LEFT ═══ */}
         <div style={{flex:"0 0 50%",borderRight:"1px solid #eee"}}>
@@ -794,7 +794,7 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
             <textarea value={plan.comment||""} onChange={e=>update({comment:e.target.value})} placeholder="오늘 하루 마무리..." style={{width:"100%",border:"none",background:"transparent",fontSize:10,color:"#666",outline:"none",resize:"none",lineHeight:1.7,minHeight:80}} />
           </div>
         </div>
- 
+
         {/* ═══ RIGHT ═══ */}
         <div style={{flex:"0 0 50%"}}>
           {/* D-DAY */}
@@ -863,81 +863,60 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
               </div>
             )}
           </div>
-          {/* TIME TABLE — 가로=시간(정각), 세로=10분×6행 */}
+          {/* TIME TABLE — 세로=시간(정각), 가로=10분×6열 */}
           <div style={{padding:"8px 6px 8px 6px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:6}}>TIME TABLE</div>
-            {(() => {
-              /* 각 열 = 1시간(정각), 각 행 = 10분 슬롯(6행)
-                 absSlot = hi*6 + rowIdx  (hi=hour index 0~23, rowIdx=0~5) */
-              const CELL_SIZE = 16; /* px: 정사각형 한 변 */
-              const LABEL_H = 14;
- 
-              /* 수업 블록: absSlot 범위 계산
-                 getBlockAtSlot(absSlot) — 기존 함수 사용 */
- 
-              /* 열 헤더: 시간 레이블 */
-              const hourLabels = HOUR_ROWS.map((h,hi) => String(h).padStart(2,"0")+":00");
- 
-              return (
-                <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-                  <div style={{display:"inline-flex",flexDirection:"column",minWidth:"max-content"}}>
-                    {/* 시간 레이블 행 */}
-                    <div style={{display:"flex",marginBottom:2}}>
-                      <div style={{width:14,flexShrink:0}} />
-                      {HOUR_ROWS.map((h,hi)=>(
-                        <div key={h} style={{width:CELL_SIZE,fontSize:6,color:"#bbb",fontFamily:"monospace",textAlign:"left",lineHeight:LABEL_H+"px",flexShrink:0,overflow:"visible",whiteSpace:"nowrap"}}>
-                          {String(h).padStart(2,"0")}
-                        </div>
-                      ))}
-                    </div>
-                    {/* 6개 행 (각 10분) */}
-                    {[0,1,2,3,4,5].map(rowIdx => {
-                      const minuteLabel = rowIdx===0?"":String(rowIdx*10).padStart(2,"0");
-                      return (
-                        <div key={rowIdx} style={{display:"flex",marginBottom:1}}>
-                          {/* 분 레이블 */}
-                          <div style={{width:14,fontSize:6,color:"#ccc",fontFamily:"monospace",textAlign:"right",paddingRight:2,lineHeight:CELL_SIZE+"px",flexShrink:0}}>
-                            {minuteLabel}
-                          </div>
-                          {/* 각 시간대 셀 */}
-                          {HOUR_ROWS.map((h,hi)=>{
-                            const absSlot = hi * SLOTS_PER_HOUR + rowIdx;
-                            const uBlock = getBlockAtSlot(absSlot);
-                            const ttBlock = getTtAtSlot(absSlot);
-                            const bg = uBlock
-                              ? uBlock.color
-                              : ttBlock
-                                ? "#e0e0de"
-                                : "transparent";
-                            const hasBorder = !uBlock && !ttBlock;
-                            return (
-                              <div
-                                key={hi}
-                                onClick={()=>{ if(uBlock) setEditingBlock(uBlock); }}
-                                style={{
-                                  width: CELL_SIZE,
-                                  height: CELL_SIZE,
-                                  flexShrink: 0,
-                                  background: bg,
-                                  border: hasBorder ? "0.5px solid #e8e8e8" : "none",
-                                  borderRadius: 3,
-                                  cursor: uBlock ? "pointer" : "default",
-                                  boxSizing: "border-box",
-                                }}
-                              />
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
+            <div style={{display:"flex"}}>
+              {/* 분 레이블 헤더 행 */}
+              <div style={{display:"flex",flexDirection:"column"}}>
+                {/* 빈 코너 */}
+                <div style={{height:14}} />
+                {/* 시간 레이블 */}
+                {HOUR_ROWS.map((h,hi)=>(
+                  <div key={h} style={{height:16,marginBottom:1,fontSize:7,color:"#bbb",fontFamily:"monospace",lineHeight:"16px",paddingRight:3,whiteSpace:"nowrap"}}>
+                    {String(h).padStart(2,"0")}
                   </div>
-                </div>
-              );
-            })()}
+                ))}
+              </div>
+              {/* 6개 열 (각 10분) */}
+              <div style={{display:"flex",gap:1}}>
+                {[0,1,2,3,4,5].map(colIdx => {
+                  const minLabel = colIdx === 0 ? "" : String(colIdx*10);
+                  return (
+                    <div key={colIdx} style={{display:"flex",flexDirection:"column",gap:1}}>
+                      {/* 분 레이블 */}
+                      <div style={{height:14,fontSize:7,color:"#ccc",fontFamily:"monospace",textAlign:"center",lineHeight:"14px",width:16}}>{minLabel}</div>
+                      {/* 각 시간대 셀 */}
+                      {HOUR_ROWS.map((h,hi)=>{
+                        const absSlot = hi * SLOTS_PER_HOUR + colIdx;
+                        const uBlock = getBlockAtSlot(absSlot);
+                        const ttBlock = getTtAtSlot(absSlot);
+                        const bg = uBlock ? uBlock.color : ttBlock ? "#e0e0de" : "transparent";
+                        const hasBorder = !uBlock && !ttBlock;
+                        return (
+                          <div
+                            key={hi}
+                            onClick={()=>{ if(uBlock) setEditingBlock(uBlock); }}
+                            style={{
+                              width:16, height:16,
+                              background:bg,
+                              border: hasBorder ? "0.5px solid #e8e8e8" : "none",
+                              borderRadius:3,
+                              cursor: uBlock ? "pointer" : "default",
+                              flexShrink:0,
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
- 
+
       {/* Block edit popup */}
       {editingBlock && (
         <div style={{position:"fixed",bottom:66,left:10,right:10,maxWidth:460,margin:"0 auto",background:"#fff",borderRadius:14,padding:14,boxShadow:"0 -4px 20px rgba(0,0,0,0.10)",border:"1px solid #eee",zIndex:60}}>
@@ -953,16 +932,16 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
     </div>
   );
 }
- 
- 
+
+
 ReactDOM.createRoot(document.getElementById("root")).render(<AuthWrapper />);
- 
+
 /* ════════════ OVERVIEW ════════════ */
 function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentWeek,todos,setTodos,ddays,setDdays}) {
   const todayStr = getToday();
   const weekDates = getWeekDates(weekKey);
   const toggleTodo = (id) => setTodos((p) => p.map((t) => t.id === id ? {...t, done: !t.done} : t));
- 
+
   const getBlocks = (dayIdx) => {
     const isWe = dayIdx >= 5;
     const result = [];
@@ -979,13 +958,13 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
     ub.forEach(b => result.push({type:"custom",start:b.start,end:b.end,name:b.title,color:b.color||"#888"}));
     return result;
   };
- 
+
   const sortedDdays = [...ddays].sort((a,b) => {
     const da = parseInt(calcDday(a.date).replace("D-","").replace("D+","").replace("D-DAY","0"));
     const db = parseInt(calcDday(b.date).replace("D-","").replace("D+","").replace("D-DAY","0"));
     return da - db;
   });
- 
+
   return (
     <div style={{padding:"16px 12px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,background:"#222",color:"#fff",borderRadius:12,padding:"12px 16px"}}>
@@ -997,7 +976,7 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
         </div>
         <button onClick={()=>setWeekKey(shiftWeek(weekKey,1))} style={{background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",width:28,height:28,borderRadius:8,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
       </div>
- 
+
       {/* D-Day summary in overview */}
       {ddays.length > 0 && (
         <div style={{marginBottom:14,background:"#fff",borderRadius:10,padding:"10px 12px",boxShadow:"0 1px 4px rgba(0,0,0,0.03)"}}>
@@ -1018,7 +997,7 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
           </div>
         </div>
       )}
- 
+
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:16}}>
         {DAY_NAMES.map((d,i) => {
           const wd = weekDates[i];
@@ -1036,7 +1015,7 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
               const nb = b.ddStr === "D-DAY" ? 0 : parseInt(b.ddStr.replace("D-",""));
               return na - nb;
             }) : [];
- 
+
           return (
             <div key={i} style={{background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,0.03)",overflow:"hidden",border:isToday?"2px solid #222":"2px solid transparent"}}>
               <div style={{padding:"6px 8px 5px",borderBottom:"1px solid #f0f0ee"}}>
@@ -1059,7 +1038,7 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
                   </div>
                 )}
               </div>
- 
+
               {/* D-Day badges on this day (D-DAY 당일) */}
               {dayDdays.length > 0 && (
                 <div style={{padding:"3px 6px 0",display:"flex",flexDirection:"column",gap:2}}>
@@ -1072,7 +1051,7 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
                   ))}
                 </div>
               )}
- 
+
               <div style={{padding:"4px 6px 4px",display:"flex",flexDirection:"column",gap:3,minHeight:60}}>
                 {blocks.length===0 && dayTodos.length===0 && dayDdays.length===0 && <div style={{fontSize:8,color:"#ddd",textAlign:"center",padding:"20px 0"}}>일정 없음</div>}
                 {blocks.map((b,bi) => {
@@ -1092,7 +1071,7 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
                   );
                 })}
               </div>
- 
+
               {dayTodos.length > 0 && (
                 <div style={{padding:"4px 6px 8px",borderTop:"1px dashed #eee"}}>
                   <div style={{fontSize:7,fontWeight:700,color:"#ccc",marginBottom:3,letterSpacing:0.5}}>TO DO</div>
@@ -1122,4 +1101,3 @@ function OverviewTab({timetable,notes,customBlocks,weekKey,setWeekKey,isCurrentW
 </script>
 </body>
 </html>
- 
