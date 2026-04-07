@@ -873,19 +873,19 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                 <div style={{height:14}} />
                 {/* 시간 레이블 */}
                 {HOUR_ROWS.map((h,hi)=>(
-                  <div key={h} style={{height:16,marginBottom:1,fontSize:7,color:"#bbb",fontFamily:"monospace",lineHeight:"16px",paddingRight:3,whiteSpace:"nowrap"}}>
+                  <div key={h} style={{height:26,marginBottom:2,fontSize:8,color:"#bbb",fontFamily:"monospace",lineHeight:"26px",paddingRight:4,whiteSpace:"nowrap"}}>
                     {String(h).padStart(2,"0")}
                   </div>
                 ))}
               </div>
               {/* 6개 열 (각 10분) */}
-              <div style={{display:"flex",gap:1}}>
+              <div style={{display:"flex",gap:2}}>
                 {[0,1,2,3,4,5].map(colIdx => {
                   const minLabel = colIdx === 0 ? "" : String(colIdx*10);
                   return (
-                    <div key={colIdx} style={{display:"flex",flexDirection:"column",gap:1}}>
+                    <div key={colIdx} style={{display:"flex",flexDirection:"column",gap:2}}>
                       {/* 분 레이블 */}
-                      <div style={{height:14,fontSize:7,color:"#ccc",fontFamily:"monospace",textAlign:"center",lineHeight:"14px",width:16}}>{minLabel}</div>
+                      <div style={{height:14,fontSize:8,color:"#ccc",fontFamily:"monospace",textAlign:"center",lineHeight:"14px",width:26}}>{minLabel}</div>
                       {/* 각 시간대 셀 */}
                       {HOUR_ROWS.map((h,hi)=>{
                         const absSlot = hi * SLOTS_PER_HOUR + colIdx;
@@ -898,7 +898,7 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
                             key={hi}
                             onClick={()=>{ if(uBlock) setEditingBlock(uBlock); }}
                             style={{
-                              width:16, height:16,
+                              width:26, height:26,
                               background:bg,
                               border: hasBorder ? "0.5px solid #e8e8e8" : "none",
                               borderRadius:3,
