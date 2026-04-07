@@ -857,52 +857,91 @@ function StudyPlanTab({ ddays, studyPlans, loadStudyPlan, saveStudyPlan, todos, 
               </div>
             )}
           </div>
-          {/* TIME TABLE */}
-          <div style={{padding:"8px 10px 8px 10px",overflowY:"auto"}}>
+          {/* TIME TABLE — 컬럼 방식 */}
+          <div style={{padding:"8px 6px 8px 6px"}}>
             <div style={{fontSize:7,fontWeight:700,letterSpacing:2,color:"#bbb",marginBottom:4}}>TIME TABLE</div>
-            <div style={{position:"relative"}}>
-              {HOUR_ROWS.map((h, hi) => {
-                const slotBase = hi * SLOTS_PER_HOUR;
-                const label = String(h).padStart(2,"0") + ":00";
-                return (
-                  <div key={h} style={{display:"flex",borderBottom:"1px solid #f0efec"}}>
-                    <div style={{width:34,fontSize:7,color:"#bbb",fontFamily:"monospace",flexShrink:0,padding:"2px 3px 0 0",lineHeight:"20px"}}>{label}</div>
-                    <div style={{flex:1,display:"flex",flexDirection:"column"}}>
-                      {[0,1,2,3,4,5].map(slot => {
-                        const absSlot = slotBase + slot;
-                        const userBlock = getBlockAtSlot(absSlot);
-                        const ttBlock = getTtAtSlot(absSlot);
-                        const isTtStart = ttBlock && ttBlock.start === absSlot;
-                        const isUserStart = userBlock && userBlock.start === absSlot;
-                        const isHour = slot === 0;
-                        const bg = userBlock ? userBlock.color : (ttBlock ? "#e0e0de" : "transparent");
-                        return (
-                          <div
-                            key={slot}
-                            onClick={() => { if(userBlock && userBlock.start===absSlot) setEditingBlock(userBlock); }}
-                            style={{
-                              height: 8,
-                              background: bg,
-                              borderBottom: slot===5 ? "none" : (slot===2?"1px dashed #eee":"1px solid #f8f7f4"),
-                              position:"relative",
-                              cursor: userBlock ? "pointer" : "default",
-                              borderRadius: isUserStart ? "2px 2px 0 0" : (userBlock && userBlock.start+userBlock.len-1===absSlot ? "0 0 2px 2px" : 0)
-                            }}
-                          >
-                            {isTtStart && !userBlock && (
-                              <span style={{position:"absolute",left:2,top:0,fontSize:6,color:"#aaa",lineHeight:"8px",whiteSpace:"nowrap",overflow:"hidden",maxWidth:"90%",pointerEvents:"none"}}>{ttBlock.name}</span>
-                            )}
-                            {isUserStart && (
-                              <span style={{position:"absolute",left:2,top:0,fontSize:6,color:"rgba(0,0,0,0.5)",lineHeight:"8px",whiteSpace:"nowrap",overflow:"hidden",maxWidth:"90%",pointerEvents:"none"}}>{userBlock.label}</span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
+            {(() => {
+              /* 컬럼 배정: 겹치는 블록들을 서로 다른 컬럼에 배치 */
+              const NUM_COLS = 4;
+              const ROW_H = 14; /* px per 10min slot */
+              const LABEL_W = 36;
+              const totalH_px = TOTAL_SLOTS * ROW_H;
+
+              /* 블록 → 컬럼 배정 */
+              const colAssign = {};
+              const sorted = [...blocks].sort((a,b)=>a.start-b.start);
+              sorted.forEach(b => {
+                let col = 0;
+                while (col < NUM_COLS) {
+                  const conflict = sorted.filter(o => colAssign[o.id]===col && o.id!==b.id).some(o => {
+                    return !(o.start+o.len<=b.start || b.start+b.len<=o.start);
+                  });
+                  if (!conflict) break;
+                  col++;
+                }
+                colAssign[b.id] = col;
+              });
+
+              return (
+                <div style={{display:"flex",position:"relative",height:totalH_px+1}}>
+                  {/* Hour labels */}
+                  <div style={{width:LABEL_W,flexShrink:0,position:"relative"}}>
+                    {HOUR_ROWS.map((h,hi)=>(
+                      <div key={h} style={{position:"absolute",top:hi*SLOTS_PER_HOUR*ROW_H,left:0,width:LABEL_W,fontSize:7,color:"#bbb",fontFamily:"monospace",lineHeight:"1"}}>{String(h).padStart(2,"0")}:00</div>
+                    ))}
                   </div>
-                );
-              })}
-            </div>
+                  {/* Grid lines + timetable bg */}
+                  <div style={{flex:1,position:"relative",borderLeft:"1px solid #eee"}}>
+                    {/* Hour lines */}
+                    {HOUR_ROWS.map((h,hi)=>(
+                      <div key={h} style={{position:"absolute",top:hi*SLOTS_PER_HOUR*ROW_H,left:0,right:0,borderTop:hi===0?"none":"1px solid #eee"}} />
+                    ))}
+                    {/* 30min dashed lines */}
+                    {HOUR_ROWS.map((h,hi)=>(
+                      <div key={"h"+h} style={{position:"absolute",top:(hi*SLOTS_PER_HOUR+3)*ROW_H,left:0,right:0,borderTop:"1px dashed #f0efec"}} />
+                    ))}
+                    {/* Timetable class blocks (회색, 전체 너비) */}
+                    {ttSlots.map((tt,ti)=>{
+                      const top = tt.start * ROW_H;
+                      const height = (tt.end - tt.start) * ROW_H;
+                      return (
+                        <div key={ti} style={{position:"absolute",top,left:0,right:0,height,background:"#e4e4e2",borderRadius:4,overflow:"hidden",zIndex:1}}>
+                          <span style={{fontSize:7,color:"#999",padding:"1px 4px",display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tt.name}</span>
+                        </div>
+                      );
+                    })}
+                    {/* User blocks — 컬럼 분할 */}
+                    {sorted.map(b=>{
+                      const col = colAssign[b.id] || 0;
+                      const colW = 100 / NUM_COLS;
+                      const top = b.start * ROW_H;
+                      const height = b.len * ROW_H;
+                      return (
+                        <div
+                          key={b.id}
+                          onClick={()=>setEditingBlock(b)}
+                          style={{
+                            position:"absolute",
+                            top,
+                            left: col * colW + "%",
+                            width: colW + "%",
+                            height,
+                            background: b.color,
+                            borderRadius: 6,
+                            zIndex: 2,
+                            cursor:"pointer",
+                            overflow:"hidden",
+                            padding:"1px 3px"
+                          }}
+                        >
+                          {height >= 18 && <span style={{fontSize:7,color:"rgba(0,0,0,0.5)",display:"block",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{b.label}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
